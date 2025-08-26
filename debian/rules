@@ -7,12 +7,6 @@ override_dh_auto_install:
 	# Install the binary to /usr/bin
 	mkdir -p debian/tty-egpf-monitor/usr/bin
 	cp build/sermon debian/tty-egpf-monitor/usr/bin/tty-egpf-monitor
-	
-	# Install man page if available
-	mkdir -p debian/tty-egpf-monitor/usr/share/man/man1
-	if [ -f tty-egpf-monitor.1 ]; then
-		cp tty-egpf-monitor.1 debian/tty-egpf-monitor/usr/share/man/man1/
-	fi
 
 override_dh_auto_clean:
 	# Clean build artifacts

@@ -6,4 +6,4 @@ tty-egpf-monitor (1.0.0-1) unstable; urgency=medium
   * Real-time data capture and analysis
   * eBPF-based packet filtering
 
- -- Adrian <adrian@example.com>  $(date -R)
+ -- Adrian <adrian@example.com>  Mon, 26 Aug 2025 23:00:00 +0000
