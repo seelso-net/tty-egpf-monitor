@@ -39,7 +39,8 @@ jobs:
           libssl-dev \
           libnuma-dev \
           cmake \
-          ninja-build
+          ninja-build \
+          llvm
         
         # Clone and build bpftool
         git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
@@ -67,8 +68,11 @@ jobs:
 
     - name: Test basic functionality
       run: |
-        # Test that the binary can be executed and shows help
-        ./build/sermon --help || true
+        # Verify binary properties (not executing eBPF programs on runner)
+        echo "Binary verification:"
+        file build/sermon
+        echo "Binary size: $(stat -c%s build/sermon) bytes"
+        echo "Binary permissions: $(stat -c%a build/sermon)"
         
         # Test that required libraries are linked
         ldd build/sermon
@@ -116,7 +120,8 @@ jobs:
           libssl-dev \
           libnuma-dev \
           cmake \
-          ninja-build
+          ninja-build \
+          llvm
         
         git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
         cd /tmp/linux/tools/bpf/bpftool
@@ -132,8 +137,13 @@ jobs:
 
     - name: Test build artifacts
       run: |
-        # Verify the binary works
-        ./build/sermon --help || echo "Help test completed"
+        # Restore executable permissions (artifacts may lose them)
+        chmod +x build/sermon || echo "Could not restore executable permissions"
+        
+        # Verify binary properties (not executing eBPF programs on runner)
+        echo "Binary verification:"
+        file build/sermon
+        echo "Binary size: $(stat -c%s build/sermon) bytes"
         
         # Check binary dependencies
         ldd build/sermon
@@ -162,11 +172,11 @@ jobs:
     - name: Check code formatting
       run: |
         # Check if code follows clang-format style
-        find src/ -name "*.c" -o -name "*.h" | xargs clang-format --dry-run --Werror || echo "Code formatting check completed"
+        find src/ -name "*.c" -o -name "*.h" | xargs clang-format --dry-run --Werror
 
     - name: Static analysis with cppcheck
       run: |
-        cppcheck --enable=all --error-exitcode=1 src/ || echo "Static analysis completed"
+        cppcheck --enable=all --error-exitcode=1 src/
 
     - name: Check for common issues
       run: |

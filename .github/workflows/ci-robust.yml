@@ -44,7 +44,8 @@ jobs:
           libssl-dev \
           libnuma-dev \
           cmake \
-          ninja-build
+          ninja-build \
+          llvm
         
         # Try different kernel versions for bpftool
         for version in v6.6 v6.5 v6.4 v6.3; do
@@ -103,10 +104,18 @@ jobs:
     - name: Test basic functionality
       run: |
         echo "Testing basic functionality..."
-        ./build/sermon --help || echo "Help test completed (exit code: $?)"
+        echo "Checking binary properties (not executing eBPF programs on runner)..."
         
-        # Test with invalid device (should show usage)
-        timeout 5s ./build/sermon -d /dev/nonexistent || echo "Invalid device test completed (exit code: $?)"
+        # Just verify the binary exists and has correct properties
+        if [ -f build/sermon ]; then
+          echo "Binary exists and is executable"
+          file build/sermon
+          echo "Binary size: $(stat -c%s build/sermon) bytes"
+          echo "Binary permissions: $(stat -c%a build/sermon)"
+        else
+          echo "ERROR: Binary not found!"
+          exit 1
+        fi
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -151,6 +160,9 @@ jobs:
       run: |
         echo "Testing downloaded binary..."
         
+        # Restore executable permissions (artifacts may lose them)
+        chmod +x build/sermon || echo "Could not restore executable permissions"
+        
         if [ -f build/sermon ]; then
           echo "Binary exists and is executable:"
           ls -la build/sermon
@@ -158,11 +170,12 @@ jobs:
           echo "Binary type:"
           file build/sermon
           
+          echo "Binary size: $(stat -c%s build/sermon) bytes"
+          
           echo "Dependencies:"
           ldd build/sermon || echo "ldd failed"
           
-          echo "Help output:"
-          timeout 10s ./build/sermon --help || echo "Help test completed"
+          echo "Binary verification completed (not executing eBPF programs on runner)"
         else
           echo "ERROR: Binary not found in artifacts!"
           exit 1
