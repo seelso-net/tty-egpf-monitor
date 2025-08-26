@@ -18,6 +18,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Cache apt packages
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-${{ hashFiles('**/Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
+
     - name: Install build dependencies
       run: |
         sudo apt-get update
@@ -34,30 +42,8 @@ jobs:
           devscripts \
           dh-make \
           reprepro \
-          gnupg2
-
-    - name: Install bpftool
-      run: |
-        sudo apt-get install -y bpftool || {
-          echo "bpftool not in package manager, building from source..."
-          sudo apt-get install -y \
-            libcap-dev \
-            libpcap-dev \
-            libbfd-dev \
-            binutils-dev \
-            libreadline-dev \
-            libssl-dev \
-            libnuma-dev \
-            cmake \
-            ninja-build \
-            llvm
-          
-          git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
-          cd /tmp/linux/tools/bpf/bpftool
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-        }
+          gnupg2 \
+          bpftool
 
     - name: Build application
       run: |
@@ -98,8 +84,17 @@ jobs:
         cd apt-repo
         apt-ftparchive release . > Release
 
+    - name: Upload Debian package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tty-egpf-monitor-deb
+        path: ../tty-egpf-monitor_*.deb
+        retention-days: 30
+
     - name: Setup Pages
       uses: actions/configure-pages@v4
+      with:
+        enablement: true
 
     - name: Upload to Pages
       uses: actions/upload-pages-artifact@v3

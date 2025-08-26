@@ -14,6 +14,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Cache apt packages
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-${{ hashFiles('**/Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -25,31 +33,8 @@ jobs:
           pkg-config \
           build-essential \
           linux-headers-$(uname -r) \
-          libbpf-dev
-
-    - name: Install bpftool
-      run: |
-        # Try package first, build from source if needed
-        sudo apt-get install -y bpftool || {
-          echo "bpftool not in package manager, building from source..."
-          sudo apt-get install -y \
-            libcap-dev \
-            libpcap-dev \
-            libbfd-dev \
-            binutils-dev \
-            libreadline-dev \
-            libssl-dev \
-            libnuma-dev \
-            cmake \
-            ninja-build \
-            llvm
-          
-          git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
-          cd /tmp/linux/tools/bpf/bpftool
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-        }
+          libbpf-dev \
+          bpftool
 
     - name: Verify bpftool installation
       run: |
