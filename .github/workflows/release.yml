@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          clang \
+          make \
+          libelf-dev \
+          zlib1g-dev \
+          pkg-config \
+          build-essential \
+          linux-headers-generic \
+          libbpf-dev \
+          debhelper \
+          devscripts \
+          dh-make
+
+    - name: Install bpftool
+      run: |
+        # Try package first, build from source if needed
+        sudo apt-get install -y bpftool || {
+          echo "bpftool not in package manager, building from source..."
+          sudo apt-get install -y \
+            libcap-dev \
+            libpcap-dev \
+            libbfd-dev \
+            binutils-dev \
+            libreadline-dev \
+            libssl-dev \
+            libnuma-dev \
+            cmake \
+            ninja-build \
+            llvm
+          
+          git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
+          cd /tmp/linux/tools/bpf/bpftool
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+        }
+
+    - name: Build application
+      run: |
+        make clean
+        make
+
+    - name: Update changelog with version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
+        sed -i "s/$(date -R)/$(date -R)/" debian/changelog
+
+    - name: Build Debian package
+      run: |
+        dpkg-buildpackage -b -us -uc
+        ls -la ../*.deb
+
+    - name: Upload Debian package
+      uses: actions/upload-artifact@v4
+      with:
+        name: tty-egpf-monitor-deb
+        path: ../tty-egpf-monitor_*.deb
+        retention-days: 30
+
+  create-release:
+    needs: build-deb
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Debian package
+      uses: actions/download-artifact@v4
+      with:
+        name: tty-egpf-monitor-deb
+        path: packages/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: packages/*.deb
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

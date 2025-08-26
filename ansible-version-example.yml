@@ -1,0 +1,63 @@
+---
+# Ansible playbook for installing specific version of TTY EGPF Monitor
+# This playbook shows different methods for version-specific installation
+
+- name: Install TTY EGPF Monitor with version control
+  hosts: all
+  become: yes
+  vars:
+    tty_egpf_version: "1.0.0"  # Specify the version you want
+  
+  tasks:
+    # Method 1: APT Repository with version pinning
+    - name: Add TTY EGPF Monitor APT repository
+      apt_repository:
+        repo: "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor stable main"
+        state: present
+        filename: tty-egpf-monitor
+        update_cache: yes
+
+    - name: Install specific version via APT (if available)
+      apt:
+        name: "tty-egpf-monitor={{ tty_egpf_version }}-1"
+        state: present
+        update_cache: yes
+      ignore_errors: yes
+
+    # Method 2: Direct .deb download if APT version not available
+    - name: Download specific version .deb file
+      get_url:
+        url: "https://github.com/seelso-net/tty-egpf-monitor/releases/download/v{{ tty_egpf_version }}/tty-egpf-monitor_{{ tty_egpf_version }}_amd64.deb"
+        dest: "/tmp/tty-egpf-monitor_{{ tty_egpf_version }}_amd64.deb"
+        mode: '0644'
+      when: ansible_architecture == "x86_64"
+      ignore_errors: yes
+
+    - name: Install .deb file
+      apt:
+        deb: "/tmp/tty-egpf-monitor_{{ tty_egpf_version }}_amd64.deb"
+        state: present
+      when: ansible_architecture == "x86_64"
+      ignore_errors: yes
+
+    # Method 3: Fallback to latest version
+    - name: Install latest version if specific version failed
+      apt:
+        name: tty-egpf-monitor
+        state: present
+        update_cache: yes
+      when: ansible_architecture == "x86_64"
+
+    - name: Verify installation
+      command: tty-egpf-monitor --help
+      register: help_output
+      changed_when: false
+
+    - name: Display installed version
+      shell: dpkg -l | grep tty-egpf-monitor
+      register: version_output
+      changed_when: false
+
+    - name: Show version info
+      debug:
+        var: version_output.stdout_lines

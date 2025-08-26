@@ -1,0 +1,29 @@
+---
+# Ansible playbook for installing TTY EGPF Monitor
+# This playbook adds the APT repository and installs the package
+
+- name: Install TTY EGPF Monitor
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add TTY EGPF Monitor APT repository
+      apt_repository:
+        repo: "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor stable main"
+        state: present
+        filename: tty-egpf-monitor
+        update_cache: yes
+
+    - name: Install TTY EGPF Monitor
+      apt:
+        name: tty-egpf-monitor
+        state: present
+        update_cache: yes
+
+    - name: Verify installation
+      command: tty-egpf-monitor --help
+      register: help_output
+      changed_when: false
+
+    - name: Display help output
+      debug:
+        var: help_output.stdout_lines

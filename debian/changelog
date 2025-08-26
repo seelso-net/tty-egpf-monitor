@@ -1,0 +1,9 @@
+tty-egpf-monitor (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Advanced serial port monitoring with eBPF technology
+  * Dual-mode operation (active/passive monitoring)
+  * Real-time data capture and analysis
+  * eBPF-based packet filtering
+
+ -- Adrian <adrian@example.com>  $(date -R)
