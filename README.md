@@ -65,9 +65,87 @@ sudo apt-get install clang make bpftool libbpf-dev libelf-dev zlib1g-dev pkg-con
 sudo dnf install clang make bpftool libbpf-devel elfutils-libelf-devel zlib-devel pkg-config
 ```
 
+## 📦 Installation
+
+### Option 1: APT Repository (Recommended)
+```bash
+# Add the official APT repository and install latest version
+curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/setup-repo.sh | bash
+
+# Or install a specific version
+curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/setup-repo.sh | bash -s 1.0.0
+```
+
+### Option 2: Manual APT Repository Setup
+```bash
+# Add the repository
+echo "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor stable main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+
+# Update and install
+sudo apt update
+sudo apt install tty-egpf-monitor
+```
+
+### Option 3: Version-Specific Installation
+```bash
+# Install specific version directly from GitHub releases
+curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install-version.sh | bash -s 1.0.0
+
+# Or download and install manually
+wget https://github.com/seelso-net/tty-egpf-monitor/releases/download/v1.0.0/tty-egpf-monitor_1.0.0_amd64.deb
+sudo dpkg -i tty-egpf-monitor_1.0.0_amd64.deb
+sudo apt-get install -f -y  # Fix any dependency issues
+```
+
+### Option 3: From Source
+```bash
+# Clone the repository
+git clone https://github.com/seelso-net/tty-egpf-monitor.git
+cd tty-egpf-monitor
+
+# Install dependencies
+sudo apt-get update
+sudo apt-get install -y \
+  clang \
+  make \
+  libelf-dev \
+  zlib1g-dev \
+  pkg-config \
+  build-essential \
+  linux-headers-$(uname -r) \
+  libbpf-dev
+
+# Install bpftool (if not available in package manager)
+sudo apt-get install -y bpftool || {
+  # Build from source
+  sudo apt-get install -y \
+    libcap-dev \
+    libpcap-dev \
+    libbfd-dev \
+    binutils-dev \
+    libreadline-dev \
+    libssl-dev \
+    libnuma-dev \
+    cmake \
+    ninja-build \
+    llvm
+  
+  git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
+  cd /tmp/linux/tools/bpf/bpftool
+  make -j$(nproc)
+  sudo make install
+  sudo ldconfig
+  cd -
+}
+
+# Build the application
+make clean
+make
+```
+
 ## 🚀 Quick Start
 
-### 1. Build the Application
+### 1. Build the Application (if installed from source)
 ```bash
 git clone <repository-url>
 cd tty-egpf-monitor
@@ -77,19 +155,19 @@ make
 ### 2. Run Basic Monitoring
 ```bash
 # Monitor /dev/ttyUSB0 with default settings
-sudo ./build/sermon -d /dev/ttyUSB0
+sudo tty-egpf-monitor -d /dev/ttyUSB0
 
 # Monitor with custom baud rate
-sudo ./build/sermon -d /dev/ttyUSB0 --baud 115200
+sudo tty-egpf-monitor -d /dev/ttyUSB0 --baud 115200
 
 # Save output to custom log file
-sudo ./build/sermon -d /dev/ttyUSB0 -l my_serial_log.jsonl
+sudo tty-egpf-monitor -d /dev/ttyUSB0 -l my_serial_log.jsonl
 ```
 
 ### 3. Advanced Configuration
 ```bash
 # Full serial configuration
-sudo ./build/sermon \
+sudo tty-egpf-monitor \
   -d /dev/ttyUSB0 \
   --baud 9600 \
   --databits 8 \
@@ -104,7 +182,7 @@ sudo ./build/sermon \
 ### Basic Serial Port Monitoring
 ```bash
 # Start monitoring
-sudo ./build/sermon -d /dev/ttyUSB0
+sudo tty-egpf-monitor -d /dev/ttyUSB0
 
 # In another terminal, use the serial port
 echo "Hello World" > /dev/ttyUSB0
@@ -114,7 +192,7 @@ cat /dev/ttyUSB0
 ### Monitoring Industrial Equipment
 ```bash
 # Monitor Modbus RTU communication
-sudo ./build/sermon \
+sudo tty-egpf-monitor \
   -d /dev/ttyUSB0 \
   --baud 9600 \
   --databits 8 \
@@ -126,7 +204,7 @@ sudo ./build/sermon \
 ### Debugging Embedded Systems
 ```bash
 # Monitor UART communication with embedded device
-sudo ./build/sermon \
+sudo tty-egpf-monitor \
   -d /dev/ttyACM0 \
   --baud 115200 \
   -l embedded_debug.jsonl
