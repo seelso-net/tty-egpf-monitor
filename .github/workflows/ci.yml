@@ -29,25 +29,27 @@ jobs:
 
     - name: Install bpftool
       run: |
-        # Install bpftool from kernel sources
-        sudo apt-get install -y \
-          libcap-dev \
-          libpcap-dev \
-          libbfd-dev \
-          binutils-dev \
-          libreadline-dev \
-          libssl-dev \
-          libnuma-dev \
-          cmake \
-          ninja-build \
-          llvm
-        
-        # Clone and build bpftool
-        git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
-        cd /tmp/linux/tools/bpf/bpftool
-        make -j$(nproc)
-        sudo make install
-        sudo ldconfig
+        # Try package first, build from source if needed
+        sudo apt-get install -y bpftool || {
+          echo "bpftool not in package manager, building from source..."
+          sudo apt-get install -y \
+            libcap-dev \
+            libpcap-dev \
+            libbfd-dev \
+            binutils-dev \
+            libreadline-dev \
+            libssl-dev \
+            libnuma-dev \
+            cmake \
+            ninja-build \
+            llvm
+          
+          git clone --depth 1 --branch v6.6 https://github.com/torvalds/linux.git /tmp/linux
+          cd /tmp/linux/tools/bpf/bpftool
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+        }
 
     - name: Verify bpftool installation
       run: |
@@ -81,11 +83,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: tty-egpf-monitor-build
-        path: |
-          build/sermon
-          build/sniffer.bpf.o
-          build/sniffer.skel.h
-          build/vmlinux.h
+        path: build/sermon
         retention-days: 7
 
 
