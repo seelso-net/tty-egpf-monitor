@@ -187,6 +187,21 @@ jobs:
         mkdir -p packages/
         find artifacts/ -name "*.deb" -exec cp {} packages/ \;
         ls -la packages/
+        
+        # Organize packages by distribution
+        mkdir -p packages-noble packages-jammy
+        for deb in packages/*.deb; do
+          if [ -f "$deb" ]; then
+            # Check which distribution this package was built for
+            if dpkg-deb -I "$deb" control | grep -q "libbpf0"; then
+              echo "Package $deb is for jammy (libbpf0)"
+              cp "$deb" packages-jammy/
+            else
+              echo "Package $deb is for noble (libbpf1)"
+              cp "$deb" packages-noble/
+            fi
+          fi
+        done
 
     - name: Publish apt repo to gh-pages
       env:
@@ -208,18 +223,28 @@ jobs:
           cd -
         }
 
-        # Copy all packages to pool (don't overwrite, just add new ones)
-        mkdir -p /tmp/apt-repo/pool/main
-        cp packages/*.deb /tmp/apt-repo/pool/main/
-        echo "Packages in pool:"
-        ls -la /tmp/apt-repo/pool/main/
+        # Create separate pool directories for each distribution
+        mkdir -p /tmp/apt-repo/pool-noble/main /tmp/apt-repo/pool-jammy/main
+        cp packages-noble/*.deb /tmp/apt-repo/pool-noble/main/ 2>/dev/null || true
+        cp packages-jammy/*.deb /tmp/apt-repo/pool-jammy/main/ 2>/dev/null || true
+        
+        echo "Packages in noble pool:"
+        ls -la /tmp/apt-repo/pool-noble/main/ 2>/dev/null || echo "No noble packages"
+        echo "Packages in jammy pool:"
+        ls -la /tmp/apt-repo/pool-jammy/main/ 2>/dev/null || echo "No jammy packages"
 
         # Update packages for both codenames
         for CODENAME in noble jammy; do
           echo "Processing $CODENAME..."
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
           cd /tmp/apt-repo
-          apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
+          
+          # Use distribution-specific pool for each codename
+          if [ "$CODENAME" = "noble" ]; then
+            apt-ftparchive packages pool-noble/main > dists/${CODENAME}/main/binary-amd64/Packages
+          else
+            apt-ftparchive packages pool-jammy/main > dists/${CODENAME}/main/binary-amd64/Packages
+          fi
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
           apt-ftparchive \
             -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
