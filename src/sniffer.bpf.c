@@ -122,7 +122,8 @@ int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
 {
-    __s64 ret = ctx->ret; /* new fd if >=0 */
+    __s64 ret;
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret); /* new fd if >=0 */
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
@@ -199,7 +200,8 @@ int tp_enter_close(struct trace_event_raw_sys_enter *ctx)
 SEC("tracepoint/syscalls/sys_exit_close")
 int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
 {
-    __s64 ret = ctx->ret;
+    __s64 ret;
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct close_ctx *cc = bpf_map_lookup_elem(&cl_ctx, &tgid);
