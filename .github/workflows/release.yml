@@ -148,15 +148,13 @@ jobs:
 
     - name: Build Debian package
       run: |
-        # Add the correct libbpf dependency based on distribution
+        # Use the correct control file based on distribution
         if grep -q "jammy" /etc/os-release; then
-          echo "Adding libbpf0 dependency for jammy"
-          # Use awk for more reliable text replacement
-          awk '/^Depends:/ { gsub(/Depends: \${misc:Depends}, libc6 \(>= 2\.34\), adduser/, "Depends: ${misc:Depends}, libbpf0 (>= 1:0.5.0), libc6 (>= 2.34), adduser"); print; next } { print }' debian/control > debian/control.tmp && mv debian/control.tmp debian/control
+          echo "Using jammy control file (libbpf0)"
+          cp debian/control.jammy debian/control
         elif grep -q "noble" /etc/os-release; then
-          echo "Adding libbpf1 dependency for noble"
-          # Use awk for more reliable text replacement
-          awk '/^Depends:/ { gsub(/Depends: \${misc:Depends}, libc6 \(>= 2\.34\), adduser/, "Depends: ${misc:Depends}, libbpf1 (>= 1:0.5.0), libc6 (>= 2.34), adduser"); print; next } { print }' debian/control > debian/control.tmp && mv debian/control.tmp debian/control
+          echo "Using noble control file (libbpf1)"
+          cp debian/control.noble debian/control
         fi
         
         echo "Final debian/control:"

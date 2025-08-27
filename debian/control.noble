@@ -1,0 +1,30 @@
+Source: tty-egpf-monitor
+Section: utils
+Priority: optional
+Maintainer: Adrian <adrian@example.com>
+Build-Depends: debhelper (>= 13), clang, make, libelf-dev, zlib1g-dev, pkg-config, build-essential, linux-headers-generic, libbpf-dev, bpftool | linux-tools-common
+
+Package: tty-egpf-monitord
+Architecture: any
+Depends: ${misc:Depends}, libbpf1 (>= 1:0.5.0), libc6 (>= 2.34), adduser
+Description: eBPF serial monitoring daemon with HTTP API
+ A sophisticated real-time serial port monitoring tool that combines
+ the power of eBPF (extended Berkeley Packet Filter) with intelligent
+ state management to provide comprehensive visibility into TTY device
+ activity. Perfect for debugging, reverse engineering, and monitoring
+ serial communications.
+ .
+ Features:
+  * Dual-mode operation (active/passive monitoring)
+  * Real-time data capture and analysis
+  * eBPF-based packet filtering
+  * Comprehensive logging and reporting
+  * Support for various serial protocols
+  * Listens on Unix socket /run/tty-egpf-monitord.sock
+
+Package: tty-egpf-monitor-cli
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: CLI for tty-egpf-monitord HTTP API
+ Lightweight command line client to manage the local daemon and list/add
+ monitored ports, suitable for container environments.
