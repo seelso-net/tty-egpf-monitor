@@ -109,14 +109,14 @@ jobs:
         cd /tmp/apt-repo
         apt-ftparchive packages pool/main > dists/stable/main/binary-amd64/Packages
         gzip -f9 dists/stable/main/binary-amd64/Packages
-        cat > dists/stable/Release <<EOF
-Label: tty-egpf-monitor
-Suite: stable
-Codename: stable
-Architectures: amd64
-Components: main
-Date: $(date -Ru)
-EOF
+        {
+          echo "Label: tty-egpf-monitor";
+          echo "Suite: stable";
+          echo "Codename: stable";
+          echo "Architectures: amd64";
+          echo "Components: main";
+          echo "Date: $(date -Ru)";
+        } > dists/stable/Release
         if [ -n "$GPG_PRIVATE_KEY" ]; then
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/stable/Release.gpg dists/stable/Release
