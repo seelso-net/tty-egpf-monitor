@@ -148,15 +148,7 @@ jobs:
 
     - name: Build Debian package
       run: |
-        # Use the correct control file based on distribution
-        if grep -q "jammy" /etc/os-release; then
-          echo "Using jammy control file (libbpf0)"
-          cp debian/control.jammy debian/control
-        elif grep -q "noble" /etc/os-release; then
-          echo "Using noble control file (libbpf1)"
-          cp debian/control.noble debian/control
-        fi
-        
+        echo "Building package with flexible libbpf dependency (libbpf0 | libbpf1)"
         echo "Final debian/control:"
         cat debian/control
         
@@ -200,20 +192,8 @@ jobs:
         find artifacts/ -name "*.deb" -exec cp {} packages/ \;
         ls -la packages/
         
-        # Organize packages by distribution
-        mkdir -p packages-noble packages-jammy
-        for deb in packages/*.deb; do
-          if [ -f "$deb" ]; then
-            # Check which distribution this package was built for
-            if dpkg-deb -I "$deb" control | grep -q "libbpf0"; then
-              echo "Package $deb is for jammy (libbpf0)"
-              cp "$deb" packages-jammy/
-            else
-              echo "Package $deb is for noble (libbpf1)"
-              cp "$deb" packages-noble/
-            fi
-          fi
-        done
+        # All packages work on both distributions
+        echo "All packages work on both distributions (libbpf0 | libbpf1)"
 
     - name: Publish apt repo to gh-pages
       env:
@@ -235,15 +215,12 @@ jobs:
           cd -
         }
 
-        # Create separate pool directories for each distribution
-        mkdir -p /tmp/apt-repo/pool-noble/main /tmp/apt-repo/pool-jammy/main
-        cp packages-noble/*.deb /tmp/apt-repo/pool-noble/main/ 2>/dev/null || true
-        cp packages-jammy/*.deb /tmp/apt-repo/pool-jammy/main/ 2>/dev/null || true
+        # Create single pool directory for both distributions
+        mkdir -p /tmp/apt-repo/pool/main
+        cp packages/*.deb /tmp/apt-repo/pool/main/ 2>/dev/null || true
         
-        echo "Packages in noble pool:"
-        ls -la /tmp/apt-repo/pool-noble/main/ 2>/dev/null || echo "No noble packages"
-        echo "Packages in jammy pool:"
-        ls -la /tmp/apt-repo/pool-jammy/main/ 2>/dev/null || echo "No jammy packages"
+        echo "Packages in pool:"
+        ls -la /tmp/apt-repo/pool/main/ 2>/dev/null || echo "No packages"
 
         # Update packages for both codenames
         for CODENAME in noble jammy; do
@@ -251,12 +228,8 @@ jobs:
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
           cd /tmp/apt-repo
           
-          # Use distribution-specific pool for each codename
-          if [ "$CODENAME" = "noble" ]; then
-            apt-ftparchive packages pool-noble/main > dists/${CODENAME}/main/binary-amd64/Packages
-          else
-            apt-ftparchive packages pool-jammy/main > dists/${CODENAME}/main/binary-amd64/Packages
-          fi
+          # Use single pool for both distributions
+          apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
           apt-ftparchive \
             -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
