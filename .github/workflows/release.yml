@@ -37,6 +37,7 @@ jobs:
       run: |
         apt-get update
         apt-get install -y \
+          git \
           clang \
           make \
           libelf-dev \
@@ -58,13 +59,28 @@ jobs:
       run: |
         set -e
         if ! command -v bpftool >/dev/null 2>&1; then
+          KVER=$(uname -r)
+          apt-get update
+          # Try exact kernel-specific tools first
+          apt-get install -y linux-tools-$KVER linux-cloud-tools-$KVER || true
+          # Fallback to azure meta if running on azure kernels
+          apt-get install -y linux-tools-azure linux-cloud-tools-azure || true
+          # Generic fallback
           apt-get install -y linux-tools-common linux-tools-generic || true
+          # Find any bpftool binary shipped by linux-tools and link it
           BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
           if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
             ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
           fi
         fi
-        bpftool version || true
+        if ! command -v bpftool >/dev/null 2>&1; then
+          echo "bpftool not found via distro packages, building from source..."
+          rm -rf /tmp/bpftool-src
+          git clone --depth 1 https://github.com/libbpf/bpftool.git /tmp/bpftool-src
+          make -C /tmp/bpftool-src -j$(nproc)
+          install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        fi
+        bpftool version || (echo "bpftool still unavailable" && exit 1)
 
     - name: Build application
       run: |
