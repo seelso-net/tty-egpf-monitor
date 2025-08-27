@@ -190,12 +190,16 @@ jobs:
           cd -
         }
 
+        # Copy all packages to pool (don't overwrite, just add new ones)
+        mkdir -p /tmp/apt-repo/pool/main
+        cp packages/*.deb /tmp/apt-repo/pool/main/
+        echo "Packages in pool:"
+        ls -la /tmp/apt-repo/pool/main/
+
         # Update packages for both codenames
         for CODENAME in noble jammy; do
           echo "Processing $CODENAME..."
-          mkdir -p /tmp/apt-repo/pool/main
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
-          cp packages/*.deb /tmp/apt-repo/pool/main/ || true
           cd /tmp/apt-repo
           apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
