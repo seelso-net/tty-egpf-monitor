@@ -69,6 +69,10 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
+    - name: Copy Debian package to workspace
+      run: |
+        cp ../tty-egpf-monitor_*.deb .
+
     - name: Setup APT repository
       run: |
         # Create repository structure
@@ -95,7 +99,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: tty-egpf-monitor-deb
-        path: ../tty-egpf-monitor_*.deb
+        path: tty-egpf-monitor_*.deb
         retention-days: 30
 
     - name: Setup Pages
