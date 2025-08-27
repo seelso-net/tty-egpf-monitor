@@ -1,4 +1,4 @@
-name: APT Repository
+name: Release
 
 on:
   push:
@@ -7,12 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: write
-      id-token: write
     
     steps:
     - name: Checkout code
@@ -40,9 +38,7 @@ jobs:
           libbpf-dev \
           debhelper \
           devscripts \
-          dh-make \
-          reprepro \
-          gnupg2
+          dh-make
 
     - name: Install bpftool
       run: |
@@ -73,28 +69,6 @@ jobs:
       run: |
         cp ../tty-egpf-monitor_*.deb .
 
-    - name: Setup APT repository
-      run: |
-        # Create repository structure
-        mkdir -p apt-repo/conf apt-repo/db apt-repo/dists apt-repo/pool
-        
-        # Create repository configuration
-        cat > apt-repo/conf/distributions << EOF
-        Origin: TTY EGPF Monitor
-        Label: TTY EGPF Monitor Repository
-        Codename: stable
-        Architectures: amd64 arm64
-        Components: main
-        Description: TTY EGPF Monitor - Advanced Serial Port Monitoring with eBPF Technology
-        EOF
-        
-        # Add package to repository
-        reprepro -b apt-repo includedeb stable ../tty-egpf-monitor_*.deb
-        
-        # Create Release file
-        cd apt-repo
-        apt-ftparchive release . > Release
-
     - name: Upload Debian package artifact
       uses: actions/upload-artifact@v4
       with:
@@ -102,23 +76,7 @@ jobs:
         path: tty-egpf-monitor_*.deb
         retention-days: 30
 
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-      continue-on-error: true
-
-    - name: Upload to Pages
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: apt-repo/
-      continue-on-error: true
-
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
-      continue-on-error: true
-
     - name: Create GitHub Release
-      if: steps.deployment.outcome == 'failure'
       uses: softprops/action-gh-release@v1
       with:
         files: tty-egpf-monitor_*.deb

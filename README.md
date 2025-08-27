@@ -67,31 +67,17 @@ sudo dnf install clang make bpftool libbpf-devel elfutils-libelf-devel zlib-deve
 
 ## 📦 Installation
 
-### Option 1: APT Repository (Recommended)
+### Option 1: GitHub Releases (Recommended)
 ```bash
-# Add the official APT repository and install latest version
-curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/setup-repo.sh | bash
-
-# Or install a specific version
-curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/setup-repo.sh | bash -s 1.0.0
+# Download and install the latest release
+wget https://github.com/seelso-net/tty-egpf-monitor/releases/latest/download/tty-egpf-monitor_*_amd64.deb
+sudo dpkg -i tty-egpf-monitor_*_amd64.deb
+sudo apt-get install -f -y  # Fix any dependency issues
 ```
 
-### Option 2: Manual APT Repository Setup
+### Option 2: Version-Specific Installation
 ```bash
-# Add the repository
-echo "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor stable main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
-
-# Update and install
-sudo apt update
-sudo apt install tty-egpf-monitor
-```
-
-### Option 3: Version-Specific Installation
-```bash
-# Install specific version directly from GitHub releases
-curl -sSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install-version.sh | bash -s 1.0.0
-
-# Or download and install manually
+# Install specific version from GitHub releases
 wget https://github.com/seelso-net/tty-egpf-monitor/releases/download/v1.0.0/tty-egpf-monitor_1.0.0_amd64.deb
 sudo dpkg -i tty-egpf-monitor_1.0.0_amd64.deb
 sudo apt-get install -f -y  # Fix any dependency issues
