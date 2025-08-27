@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  build-and-release:
+  build-packages:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -18,8 +18,6 @@ jobs:
           - codename: jammy
             container: ubuntu:22.04
     container: ${{ matrix.container }}
-    permissions:
-      contents: write
     
     steps:
     - name: Checkout code
@@ -146,6 +144,32 @@ jobs:
         path: '*.deb'
         retention-days: 30
 
+  publish-release:
+    needs: build-packages
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pages: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y apt-utils gnupg
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Organize packages
+      run: |
+        mkdir -p packages/
+        find artifacts/ -name "*.deb" -exec cp {} packages/ \;
+        ls -la packages/
+
     - name: Publish apt repo to gh-pages
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -165,21 +189,29 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           cd -
         }
-        CODENAME='${{ matrix.codename }}'
-        mkdir -p /tmp/apt-repo/pool/main
-        mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
-        cp ./*.deb /tmp/apt-repo/pool/main/
+
+        # Update packages for both codenames
+        for CODENAME in noble jammy; do
+          echo "Processing $CODENAME..."
+          mkdir -p /tmp/apt-repo/pool/main
+          mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
+          cp packages/*.deb /tmp/apt-repo/pool/main/ || true
+          cd /tmp/apt-repo
+          apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
+          gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
+            -o APT::FTPArchive::Release::Suite="${CODENAME}" \
+            -o APT::FTPArchive::Release::Codename="${CODENAME}" \
+            -o APT::FTPArchive::Release::Architectures="amd64" \
+            -o APT::FTPArchive::Release::Components="main" \
+            release dists/${CODENAME} > dists/${CODENAME}/Release
+          cd -
+        done
+
         cd /tmp/apt-repo
-        apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
-        gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
-        apt-ftparchive \
-          -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
-          -o APT::FTPArchive::Release::Suite="${CODENAME}" \
-          -o APT::FTPArchive::Release::Codename="${CODENAME}" \
-          -o APT::FTPArchive::Release::Architectures="amd64" \
-          -o APT::FTPArchive::Release::Components="main" \
-          release dists/${CODENAME} > dists/${CODENAME}/Release
         touch .nojekyll
+        
         # Publish public key at root for clients (both .asc and .gpg)
         KEYASC=""
         if [ -f "$GITHUB_WORKSPACE/public-apt-key.asc" ]; then
@@ -199,19 +231,24 @@ jobs:
         if [ -n "$KEYASC" ]; then
           gpg --dearmor < "$KEYASC" > ./public-apt-key.gpg || true
         fi
+
+        # Sign release files for both codenames
         if [ -n "$GPG_PRIVATE_KEY" ]; then
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/${CODENAME}/Release.gpg dists/${CODENAME}/Release
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --clearsign -o dists/${CODENAME}/InRelease dists/${CODENAME}/Release || true
+          for CODENAME in noble jammy; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/${CODENAME}/Release.gpg dists/${CODENAME}/Release
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --clearsign -o dists/${CODENAME}/InRelease dists/${CODENAME}/Release || true
+          done
         fi
+
         git add -A
-        git commit -m "Update apt repo for ${GITHUB_REF} (${CODENAME})" || git commit -m "Initialize apt repo"
+        git commit -m "Update apt repo for ${GITHUB_REF}" || git commit -m "Initialize apt repo"
         git push -u origin gh-pages
-        cd -
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: '*.deb'
+        files: 'packages/*.deb'
         generate_release_notes: true
         draft: false
         prerelease: false
