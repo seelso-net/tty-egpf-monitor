@@ -62,29 +62,56 @@ jobs:
     - name: Ensure bpftool
       run: |
         set -e
-        if ! command -v bpftool >/dev/null 2>&1; then
-          KVER=$(uname -r)
-          apt-get update
-          # Try exact kernel-specific tools first
-          apt-get install -y linux-tools-$KVER linux-cloud-tools-$KVER || true
-          # Fallback to azure meta if running on azure kernels
-          apt-get install -y linux-tools-azure linux-cloud-tools-azure || true
-          # Generic fallback
-          apt-get install -y linux-tools-common linux-tools-generic || true
-          # Find any bpftool binary shipped by linux-tools and link it
-          BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
-          if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
-            ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+        echo "Checking for bpftool..."
+        if command -v bpftool >/dev/null 2>&1; then
+          echo "bpftool already available: $(bpftool version)"
+          exit 0
+        fi
+
+        echo "bpftool not found, installing..."
+        
+        # In containers, uname -r reports host kernel which may not have packages
+        # So we'll try multiple strategies without relying on exact kernel match
+        
+        # First, try to find any existing bpftool in linux-tools directories
+        BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+        if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+          echo "Found existing bpftool in $BPFDIR"
+          ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+          bpftool version
+          exit 0
+        fi
+        
+        # Try to install any available linux-tools packages
+        echo "Trying to install available linux-tools packages..."
+        apt-get update >/dev/null 2>&1
+        
+        # Find available linux-tools packages and install them
+        AVAILABLE_TOOLS=$(apt-cache search "^linux-tools-[0-9]" | grep -o "linux-tools-[0-9][^ ]*" | head -5)
+        for pkg in $AVAILABLE_TOOLS; do
+          echo "Trying to install $pkg..."
+          if apt-get install -y "$pkg" >/dev/null 2>&1; then
+            echo "Successfully installed $pkg"
+            # Check if it provided bpftool
+            BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+            if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+              ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+              bpftool version
+              exit 0
+            fi
           fi
-        fi
-        if ! command -v bpftool >/dev/null 2>&1; then
-          echo "bpftool not found via distro packages, building from source..."
-          rm -rf /tmp/bpftool-src
-          git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
-          make -C /tmp/bpftool-src -j$(nproc)
-          install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
-        fi
-        bpftool version || (echo "bpftool still unavailable" && exit 1)
+        done
+        
+        # If all else fails, build from source
+        echo "No distro bpftool found, building from source..."
+        rm -rf /tmp/bpftool-src
+        git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
+        make -C /tmp/bpftool-src -j$(nproc)
+        install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        rm -rf /tmp/bpftool-src
+        
+        echo "Verifying bpftool installation..."
+        bpftool version
 
     - name: Build application
       run: |
