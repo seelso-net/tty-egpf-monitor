@@ -40,6 +40,10 @@ jobs:
           git \
           clang \
           make \
+          flex \
+          bison \
+          libreadline-dev \
+          libcap-dev \
           libelf-dev \
           zlib1g-dev \
           pkg-config \
@@ -76,7 +80,7 @@ jobs:
         if ! command -v bpftool >/dev/null 2>&1; then
           echo "bpftool not found via distro packages, building from source..."
           rm -rf /tmp/bpftool-src
-          git clone --depth 1 https://github.com/libbpf/bpftool.git /tmp/bpftool-src
+          git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
           make -C /tmp/bpftool-src -j$(nproc)
           install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
         fi

@@ -3,6 +3,7 @@
 
 BPF_CLANG ?= clang
 CC ?= cc
+BPFTOOL ?= bpftool
 
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),x86_64)
@@ -39,7 +40,7 @@ build/sniffer.bpf.o: src/sniffer.bpf.c build/vmlinux.h | build
 
 # Generate libbpf skeleton header
 build/sniffer.skel.h: build/sniffer.bpf.o | build
-	bpftool gen skeleton $< > $@
+	$(BPFTOOL) gen skeleton $< > $@
 
 # Userspace daemon and CLI
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
