@@ -142,7 +142,7 @@ jobs:
     - name: Upload Debian package artifact
       uses: actions/upload-artifact@v4
       with:
-        name: debs
+        name: debs-${{ matrix.codename }}
         path: '*.deb'
         retention-days: 30
 
