@@ -148,17 +148,13 @@ jobs:
 
     - name: Build Debian package
       run: |
-        # Set the correct libbpf dependency based on distribution
+        # For jammy, we need to modify the dependency to use libbpf0
         if grep -q "jammy" /etc/os-release; then
-          echo "Setting libbpf0 dependency for jammy"
-          awk '/^Depends:/ && /libc6/ { gsub(/Depends: \${misc:Depends}, libc6/, "Depends: ${misc:Depends}, libbpf0 (>= 1:0.5.0), libc6"); print; next } { print }' debian/control > debian/control.tmp && mv debian/control.tmp debian/control
-        elif grep -q "noble" /etc/os-release; then
-          echo "Setting libbpf1 dependency for noble"
-          awk '/^Depends:/ && /libc6/ { gsub(/Depends: \${misc:Depends}, libc6/, "Depends: ${misc:Depends}, libbpf1 (>= 1:0.5.0), libc6"); print; next } { print }' debian/control > debian/control.tmp && mv debian/control.tmp debian/control
+          echo "Modifying dependency for jammy (libbpf0)"
+          sed -i 's/libbpf1 (>= 1:0.5.0)/libbpf0 (>= 1:0.5.0)/' debian/control
         fi
         
-        # Debug: show the modified control file
-        echo "Modified debian/control:"
+        echo "Final debian/control:"
         cat debian/control
         
         dpkg-buildpackage -b -us -uc
