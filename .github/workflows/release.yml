@@ -48,6 +48,7 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
+          libbpf1 \
           linux-tools-common \
           linux-tools-generic \
           gnupg \
