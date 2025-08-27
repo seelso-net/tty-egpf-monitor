@@ -35,6 +35,7 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
+          gnupg \
           apt-utils \
           dpkg-dev \
           debhelper \
@@ -119,12 +120,24 @@ jobs:
           -o APT::FTPArchive::Release::Components="main" \
           release dists/stable > dists/stable/Release
         touch .nojekyll
-        # Publish public key at root for clients
+        # Publish public key at root for clients (both .asc and .gpg)
+        KEYASC=""
         if [ -f "$GITHUB_WORKSPACE/public-apt-key.asc" ]; then
           cp "$GITHUB_WORKSPACE/public-apt-key.asc" ./public-apt-key.asc
-        elif [ -n "$GPG_PRIVATE_KEY" ]; then
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
-          gpg --armor --export > ./public-apt-key.asc || true
+          KEYASC="public-apt-key.asc"
+        else
+          CAND=$(ls "$GITHUB_WORKSPACE"/*.asc 2>/dev/null | head -n1 || true)
+          if [ -n "$CAND" ]; then
+            cp "$CAND" ./public-apt-key.asc
+            KEYASC="public-apt-key.asc"
+          elif [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+            gpg --armor --export > ./public-apt-key.asc || true
+            KEYASC="public-apt-key.asc"
+          fi
+        fi
+        if [ -n "$KEYASC" ]; then
+          gpg --dearmor < "$KEYASC" > ./public-apt-key.gpg || true
         fi
         if [ -n "$GPG_PRIVATE_KEY" ]; then
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import

@@ -43,7 +43,7 @@ We publish .deb packages and an apt repository on the `gh-pages` branch. After a
 ```bash
 CODENAME=stable
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
-curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
+sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.gpg) /usr/share/keyrings/tty-egpf-monitor.gpg
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
 ```
