@@ -319,6 +319,8 @@ static void *http_server(void *arg)
         close(s);
         return NULL;
     }
+    /* Relax socket permissions so non-root clients can connect */
+    chmod(g_socket_path, 0666);
     listen(s, 64);
     while (!stop_flag) {
         int cfd = accept(s, NULL, NULL);

@@ -26,6 +26,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 #define MAX_DATA 256
 #define MAX_PATH 256
+/* Limit bytes compared in verifier-safe loop */
+#define COMPARE_MAX 128
 /* Maximum number of concurrently monitored target paths */
 #define MAX_TARGETS 16
 
@@ -94,11 +96,11 @@ static __always_inline void fill_common(struct event *e, __u32 type) {
 static __always_inline int str_eq_n(const char *a, const char *b, int n)
 {
 #pragma unroll
-    for (int i = 0; i < MAX_PATH; i++) {
+    for (int i = 0; i < COMPARE_MAX; i++) {
         if (i >= n) break;
-        char ca = 0, cb = 0;
-        bpf_core_read(&ca, sizeof(ca), a + i);
-        bpf_core_read(&cb, sizeof(cb), b + i);
+        /* a and b point to map value memory (scratch buffers). Direct loads are allowed. */
+        char ca = ((const volatile char *)a)[i];
+        char cb = ((const volatile char *)b)[i];
         if (ca != cb) return 0;
         if (!ca) return 1;
     }
@@ -154,7 +156,7 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             if (!tpv) continue;
             bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
             if (sw->path[0] == '\0') continue; /* unused slot */
-            if (str_eq_n(sw->path, sg->path, MAX_PATH)) {
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) {
                 matched_idx = i;
                 break;
             }
