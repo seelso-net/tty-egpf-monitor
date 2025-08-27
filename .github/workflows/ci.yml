@@ -70,7 +70,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: tty-egpf-monitor-build
+        name: tty-egpf-monitor-binary
         path: build/sermon
         retention-days: 7
 

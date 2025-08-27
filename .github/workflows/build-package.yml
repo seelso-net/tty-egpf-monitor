@@ -1,15 +1,11 @@
-name: Release
+name: Build Package
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build-package:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     
     steps:
     - name: Checkout code
@@ -52,13 +48,6 @@ jobs:
         make clean
         make
 
-    - name: Update changelog with version
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/}
-        VERSION=${VERSION#v}
-        sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
-        sed -i "s/$(date -R)/$(date -R)/" debian/changelog
-
     - name: Build Debian package
       run: |
         dpkg-buildpackage -b -us -uc
@@ -74,13 +63,3 @@ jobs:
         name: tty-egpf-monitor-deb
         path: tty-egpf-monitor_*.deb
         retention-days: 30
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: tty-egpf-monitor_*.deb
-        generate_release_notes: true
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
