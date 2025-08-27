@@ -104,14 +104,26 @@ jobs:
 
     - name: Setup Pages
       uses: actions/configure-pages@v4
-      with:
-        enablement: true
+      continue-on-error: true
 
     - name: Upload to Pages
       uses: actions/upload-pages-artifact@v3
       with:
         path: apt-repo/
+      continue-on-error: true
 
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
+      continue-on-error: true
+
+    - name: Create GitHub Release
+      if: steps.deployment.outcome == 'failure'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: tty-egpf-monitor_*.deb
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
