@@ -28,9 +28,10 @@ all: build/tty-egpf-monitord build/tty-egpf-monitor
 build:
 	mkdir -p build
 
-# Generate vmlinux.h (CO-RE) from kernel BTF once
+# Generate vmlinux.h (CO-RE) from kernel BTF once (script with fallback)
 build/vmlinux.h: | build
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $@
+	@echo "Generating vmlinux.h..."
+	@/usr/bin/env bash tools/gen-vmlinux-h.sh $@
 
 # Build BPF object
 build/sniffer.bpf.o: src/sniffer.bpf.c build/vmlinux.h | build

@@ -41,12 +41,18 @@ We publish .deb packages and an apt repository on the `gh-pages` branch. After a
 
 1) Install repository public key and add the apt source:
 ```bash
-CODENAME=stable
+CODENAME=$(lsb_release -cs)
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
 sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.gpg) /usr/share/keyrings/tty-egpf-monitor.gpg
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
 ```
+
+**Note**: The repository provides packages for different Ubuntu versions:
+- `jammy` (Ubuntu 22.04 LTS)
+- `noble` (Ubuntu 24.04 LTS)
+
+The installation script automatically detects your Ubuntu version and uses the appropriate repository.
 
 The repository is signed. If you prefer to skip verification temporarily, you may replace `signed-by=...` with `trusted=yes` (not recommended).
 
