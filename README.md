@@ -39,15 +39,16 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 ### Install via apt (GitHub-backed repo)
 We publish .deb packages and an apt repository on the `gh-pages` branch. After a tagged release (e.g., `v1.2.3`), CI builds and updates the repo automatically.
 
-1) Add the apt source:
+1) Install repository public key and add the apt source:
 ```bash
 CODENAME=stable
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
-echo "deb [trusted=yes] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
+echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
 ```
 
-Optionally, verify signatures: import our GPG pubkey and replace `trusted=yes` with `signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg`.
+The repository is signed. If you prefer to skip verification temporarily, you may replace `signed-by=...` with `trusted=yes` (not recommended).
 
 2) Install packages:
 ```bash

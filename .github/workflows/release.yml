@@ -35,6 +35,7 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
+          apt-utils \
           dpkg-dev \
           debhelper \
           devscripts \
@@ -109,16 +110,22 @@ jobs:
         cp ./*.deb /tmp/apt-repo/pool/main/
         cd /tmp/apt-repo
         apt-ftparchive packages pool/main > dists/stable/main/binary-amd64/Packages
-        gzip -f9 dists/stable/main/binary-amd64/Packages
-        {
-          echo "Label: tty-egpf-monitor";
-          echo "Suite: stable";
-          echo "Codename: stable";
-          echo "Architectures: amd64";
-          echo "Components: main";
-          echo "Date: $(date -Ru)";
-        } > dists/stable/Release
+        gzip -c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+        apt-ftparchive \
+          -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
+          -o APT::FTPArchive::Release::Suite="stable" \
+          -o APT::FTPArchive::Release::Codename="stable" \
+          -o APT::FTPArchive::Release::Architectures="amd64" \
+          -o APT::FTPArchive::Release::Components="main" \
+          release dists/stable > dists/stable/Release
         touch .nojekyll
+        # Publish public key at root for clients
+        if [ -f "$GITHUB_WORKSPACE/public-apt-key.asc" ]; then
+          cp "$GITHUB_WORKSPACE/public-apt-key.asc" ./public-apt-key.asc
+        elif [ -n "$GPG_PRIVATE_KEY" ]; then
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+          gpg --armor --export > ./public-apt-key.asc || true
+        fi
         if [ -n "$GPG_PRIVATE_KEY" ]; then
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/stable/Release.gpg dists/stable/Release
