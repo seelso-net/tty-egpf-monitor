@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 13), clang, make, libelf-dev, zlib1g-dev, pkg-confi
 
 Package: tty-egpf-monitord
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Depends: ${shlibs:Depends}, ${misc:Depends}, libbpf1, adduser
 Description: eBPF serial monitoring daemon with HTTP API
  A sophisticated real-time serial port monitoring tool that combines
  the power of eBPF (extended Berkeley Packet Filter) with intelligent
