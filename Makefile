@@ -51,7 +51,7 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 
 # Userspace daemon and CLI
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
-	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ $(shell pkg-config --libs --cflags libbpf) -lelf -lz -lpthread
+	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ -lbpf -lelf -lz -lpthread
 
 build/tty-egpf-monitor: src/cli.c | build
 	$(CC) $(CFLAGS) $(INCLUDES) src/cli.c -o $@ -lpthread
