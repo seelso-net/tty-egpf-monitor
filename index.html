@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>tty-egpf-monitor APT Repository</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        code { background: #f5f5f5; padding: 2px 4px; border-radius: 3px; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>tty-egpf-monitor APT Repository</h1>
+        
+        <div class="section">
+            <h2>Installation</h2>
+            <p>Add this repository to your system:</p>
+            <pre><code># Add GPG key
+wget -O - https://seelso-net.github.io/tty-egpf-monitor/public-apt-key.asc | sudo apt-key add -
+
+# Add repository
+echo "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+
+# Update and install
+sudo apt-get update
+sudo apt-get install tty-egpf-monitord tty-egpf-monitor-cli</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>Available Packages</h2>
+            <ul>
+                <li><strong>tty-egpf-monitord</strong> - eBPF serial monitoring daemon with HTTP API</li>
+                <li><strong>tty-egpf-monitor-cli</strong> - CLI client for managing the daemon</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Repository Structure</h2>
+            <ul>
+                <li><a href="dists/">dists/</a> - Distribution metadata</li>
+                <li><a href="pool/">pool/</a> - Package files</li>
+                <li><a href="public-apt-key.asc">public-apt-key.asc</a> - GPG public key</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Supported Distributions</h2>
+            <ul>
+                <li>Ubuntu 22.04 (jammy)</li>
+                <li>Ubuntu 24.04 (noble)</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

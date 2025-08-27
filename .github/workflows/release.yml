@@ -211,6 +211,8 @@ jobs:
 
         cd /tmp/apt-repo
         touch .nojekyll
+        # Copy index.html for better repository presentation
+        cp "$GITHUB_WORKSPACE/index.html" ./index.html || true
         
         # Publish public key at root for clients (both .asc and .gpg)
         KEYASC=""
