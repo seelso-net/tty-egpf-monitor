@@ -59,17 +59,13 @@ jobs:
 
     - name: Install correct libbpf version
       run: |
-        # Install the correct libbpf version based on Ubuntu version
-        if grep -q "jammy" /etc/os-release; then
-          echo "Ubuntu 22.04 (jammy) detected, installing libbpf0 and libbpf-dev"
-          apt-get install -y libbpf0 libbpf-dev
-        elif grep -q "noble" /etc/os-release; then
-          echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
-          apt-get install -y libbpf1 libbpf-dev
-        else
-          echo "Unknown Ubuntu version, trying both"
-          apt-get install -y libbpf0 libbpf1 libbpf-dev || true
-        fi
+        # For noble, ensure we have libbpf1 and remove any libbpf0
+        echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
+        apt-get install -y libbpf1 libbpf-dev
+        
+        # Remove libbpf0 if it exists to ensure we link against libbpf1
+        apt-get remove -y libbpf0 || true
+        apt-get autoremove -y
         
         # Verify pkg-config finds the correct libbpf
         echo "Checking pkg-config libbpf configuration:"
