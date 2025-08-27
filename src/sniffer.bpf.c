@@ -26,6 +26,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 #define MAX_DATA 256
 #define MAX_PATH 256
+/* Maximum number of concurrently monitored target paths */
+#define MAX_TARGETS 16
 
 enum evtype { EV_OPEN=1, EV_CLOSE=2, EV_READ=3, EV_WRITE=4, EV_IOCTL=5 };
 
@@ -37,6 +39,7 @@ struct event {
     __s32 ret;         /* read/ioctl/close return */
     __u32 cmd;         /* ioctl cmd */
     __u32 dir;         /* 1=write, 0=read */
+    __u32 port_idx;    /* target index matched in userspace-managed list */
     __u32 data_len, data_trunc;
     __u8  data[MAX_DATA];
 };
@@ -60,9 +63,12 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, stru
 struct close_ctx { __s32 fd; };
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, struct close_ctx); __uint(max_entries, 32768); } cl_ctx SEC(".maps");
 
-/* Target device path, set by userspace (index 0) */
+/* Target device paths, set by userspace (index 0..MAX_TARGETS-1). Empty string marks unused slot */
 struct pathval { char path[MAX_PATH]; };
-struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, 1); } target_path SEC(".maps");
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, MAX_TARGETS); } target_path SEC(".maps");
+
+/* Number of configured targets (0..MAX_TARGETS). Optional optimization hint. */
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u32); __uint(max_entries, 1); } target_count SEC(".maps");
 
 /* Per-CPU scratch buffers (avoid stack usage) */
 struct { __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, 1); } scratch1 SEC(".maps");
@@ -70,6 +76,9 @@ struct { __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY); __type(key, __u32); __type(val
 
 /* Optional: orchestrator tgid (for parity with earlier version) */
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u32); __uint(max_entries, 1); } orchestrator_tgid SEC(".maps");
+
+/* Map fd -> target index for quick attribution */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u32); __uint(max_entries, 65536); } fd_portidx SEC(".maps");
 
 static __always_inline void fill_common(struct event *e, __u32 type) {
     __u64 id = bpf_get_current_pid_tgid();
@@ -119,14 +128,6 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
 
     __u32 k0 = 0;
 
-    /* scratch1 := wanted path (from kernel map memory) */
-    struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-    if (!sw) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
-    struct pathval *tp = bpf_map_lookup_elem(&target_path, &k0);
-    if (!tp) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
-    /* copy kernel memory (ok) */
-    bpf_probe_read_kernel(sw->path, sizeof(sw->path), tp->path);
-
     /* scratch2 := user path (from userspace pointer) */
     struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
     if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
@@ -134,16 +135,44 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
     bpf_map_delete_elem(&op_ctx, &tgid);
     if (glen <= 0) return 0;
 
-    if (ret >= 0 && str_eq_n(sw->path, sg->path, MAX_PATH)) {
-        struct fdkey k = { .tgid = tgid, .fd = (__s32)ret };
-        __u8 one = 1;
-        bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    if (ret >= 0) {
+        /* Try to match against configured targets */
+        __u32 *cntp = bpf_map_lookup_elem(&target_count, &k0);
+        __u32 cnt = cntp ? *cntp : MAX_TARGETS;
+        if (cnt > MAX_TARGETS) cnt = MAX_TARGETS;
 
-        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-        if (!e) return 0;
-        fill_common(e, EV_OPEN);
-        e->cmd = 0; e->ret = ret; e->dir = 0; e->data_len = 0; e->data_trunc = 0;
-        bpf_ringbuf_submit(e, 0);
+        __s32 matched_idx = -1;
+
+#pragma unroll
+        for (int i = 0; i < MAX_TARGETS; i++) {
+            if ((__u32)i >= cnt) break;
+            /* scratch1 := wanted path i (copy from kernel memory) */
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
+            __u32 ki = i;
+            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+            if (!tpv) continue;
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+            if (sw->path[0] == '\0') continue; /* unused slot */
+            if (str_eq_n(sw->path, sg->path, MAX_PATH)) {
+                matched_idx = i;
+                break;
+            }
+        }
+
+        if (matched_idx >= 0) {
+            struct fdkey k = { .tgid = tgid, .fd = (__s32)ret };
+            __u8 one = 1;
+            __u32 midx = (unsigned)matched_idx;
+            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            if (!e) return 0;
+            fill_common(e, EV_OPEN);
+            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = midx; e->data_len = 0; e->data_trunc = 0;
+            bpf_ringbuf_submit(e, 0);
+        }
     }
     return 0;
 }
@@ -156,8 +185,8 @@ int tp_enter_close(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
-    __u8 *hit = bpf_map_lookup_elem(&fd_interest, &k);
-    if (!hit) return 0;
+    __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+    if (!idxp) return 0;
 
     struct close_ctx cc = { .fd = fd };
     bpf_map_update_elem(&cl_ctx, &tgid, &cc, BPF_ANY);
@@ -178,13 +207,16 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
     bpf_map_delete_elem(&cl_ctx, &tgid);
 
     if (ret == 0) {
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         bpf_map_delete_elem(&rd_ctx, &k);      /* drop any pending read ctx */
         bpf_map_delete_elem(&fd_interest, &k); /* unmark fd */
+        if (idxp) bpf_map_delete_elem(&fd_portidx, &k);
 
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (e) {
             fill_common(e, EV_CLOSE);
-            e->cmd = 0; e->ret = 0; e->dir = 0; e->data_len = 0; e->data_trunc = 0;
+            e->cmd = 0; e->ret = 0; e->dir = 0; e->port_idx = idxp ? *idxp : 0;
+            e->data_len = 0; e->data_trunc = 0;
             bpf_ringbuf_submit(e, 0);
         }
     }
@@ -201,8 +233,8 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
-    __u8 *hit = bpf_map_lookup_elem(&fd_interest, &k);
-    if (!hit) return 0;
+    __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+    if (!idxp) return 0;
 
     size_t cap = count > MAX_DATA ? MAX_DATA : count;
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
@@ -210,6 +242,7 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
 
     fill_common(e, EV_WRITE);
     e->dir = 1; e->ret = 0; e->cmd = 0;
+    e->port_idx = *idxp;
     e->data_len = cap; e->data_trunc = count > MAX_DATA ? (count - MAX_DATA) : 0;
     if (cap && buf) bpf_probe_read_user(e->data, cap, buf);
     bpf_ringbuf_submit(e, 0);
@@ -246,13 +279,13 @@ int tp_enter_ioctl(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
-    __u8 *hit = bpf_map_lookup_elem(&fd_interest, &k);
-    if (!hit) return 0;
+    __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+    if (!idxp) return 0;
 
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) return 0;
     fill_common(e, EV_IOCTL);
-    e->cmd = cmd; e->ret = 0; e->dir = 0;
+    e->cmd = cmd; e->ret = 0; e->dir = 0; e->port_idx = *idxp;
     e->data_len = 0; e->data_trunc = 0;
     bpf_ringbuf_submit(e, 0);
     return 0;

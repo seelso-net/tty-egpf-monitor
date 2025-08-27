@@ -4,9 +4,14 @@
 	dh $@
 
 override_dh_auto_install:
-	# Install the binary to /usr/bin
-	mkdir -p debian/tty-egpf-monitor/usr/bin
-	cp build/sermon debian/tty-egpf-monitor/usr/bin/tty-egpf-monitor
+	# Install daemon and cli into separate packages
+	mkdir -p debian/tty-egpf-monitord/usr/bin
+	mkdir -p debian/tty-egpf-monitor-cli/usr/bin
+	cp build/tty-egpf-monitord debian/tty-egpf-monitord/usr/bin/tty-egpf-monitord
+	cp build/tty-egpf-monitor debian/tty-egpf-monitor-cli/usr/bin/tty-egpf-monitor
+	mkdir -p debian/tty-egpf-monitord/lib/systemd/system
+	cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service
+	mkdir -p debian/tty-egpf-monitord/DEBIAN
 
 override_dh_auto_clean:
 	# Clean build artifacts

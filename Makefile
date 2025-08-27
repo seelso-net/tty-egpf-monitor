@@ -23,7 +23,7 @@ BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH)
 
 INCLUDES := -Ibuild -Isrc
 
-all: build/sermon
+all: build/tty-egpf-monitord build/tty-egpf-monitor
 
 build:
 	mkdir -p build
@@ -40,9 +40,12 @@ build/sniffer.bpf.o: src/sniffer.bpf.c build/vmlinux.h | build
 build/sniffer.skel.h: build/sniffer.bpf.o | build
 	bpftool gen skeleton $< > $@
 
-# Userspace orchestrator
-build/sermon: src/orchestrator.c build/sniffer.skel.h | build
-	$(CC) $(CFLAGS) $(INCLUDES) $< -o $@ $(shell pkg-config --libs --cflags libbpf) -lelf -lz -lpthread
+# Userspace daemon and CLI
+build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
+	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ $(shell pkg-config --libs --cflags libbpf) -lelf -lz -lpthread
+
+build/tty-egpf-monitor: src/cli.c | build
+	$(CC) $(CFLAGS) $(INCLUDES) src/cli.c -o $@ -lpthread
 
 clean:
 	rm -rf build
