@@ -35,6 +35,7 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
+          dpkg-dev \
           debhelper \
           devscripts \
           dh-make
@@ -84,6 +85,47 @@ jobs:
         path: '*.deb'
         retention-days: 30
 
+    - name: Publish apt repo to gh-pages
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -e
+        git config user.name "github-actions"
+        git config user.email "github-actions@users.noreply.github.com"
+        rm -rf /tmp/apt-repo
+        git clone --depth 1 --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" /tmp/apt-repo || {
+          mkdir -p /tmp/apt-repo
+          cd /tmp/apt-repo
+          git init
+          git checkout -b gh-pages
+          cd -
+        }
+        mkdir -p /tmp/apt-repo/pool/main
+        mkdir -p /tmp/apt-repo/dists/stable/main/binary-amd64
+        cp ./*.deb /tmp/apt-repo/pool/main/
+        cd /tmp/apt-repo
+        apt-ftparchive packages pool/main > dists/stable/main/binary-amd64/Packages
+        gzip -f9 dists/stable/main/binary-amd64/Packages
+        cat > dists/stable/Release <<EOF
+Label: tty-egpf-monitor
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Date: $(date -Ru)
+EOF
+        if [ -n "$GPG_PRIVATE_KEY" ]; then
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/stable/Release.gpg dists/stable/Release
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --clearsign -o dists/stable/InRelease dists/stable/Release || true
+        fi
+        git add -A
+        git commit -m "Update apt repo for ${GITHUB_REF}" || true
+        git push origin gh-pages
+        cd -
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:

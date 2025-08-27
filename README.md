@@ -36,12 +36,26 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 
 ## 📦 Installation
 
-### Install from apt
+### Install via apt (GitHub-backed repo)
+We publish .deb packages and an apt repository on the `gh-pages` branch. After a tagged release (e.g., `v1.2.3`), CI builds and updates the repo automatically.
+
+1) Add the apt source:
+```bash
+CODENAME=stable
+REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
+echo "deb [trusted=yes] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+sudo apt-get update
+```
+
+Optionally, verify signatures: import our GPG pubkey and replace `trusted=yes` with `signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg`.
+
+2) Install packages:
 ```bash
 sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
 sudo systemctl enable --now tty-egpf-monitord
 ```
 
+Defaults:
 - Socket: `/run/tty-egpf-monitord.sock`
 - Logs dir: `/var/log/tty-egpf-monitor`
 
@@ -93,8 +107,14 @@ sudo tty-egpf-monitord \
 - `GET /stream/{idx}` → chunked NDJSON stream
 
 ## Requirements & Security
-- Root privileges needed for eBPF attach
-- Socket access controls can be tightened (e.g., place socket in a directory with restricted group permissions)
+- Root privileges needed for eBPF attach.
+- Socket permissions: You can move the socket under a restricted directory and chown it to a dedicated group, then run the CLI as a member of that group.
+- Systemd unit: `tty-egpf-monitord.service` starts the daemon at boot and places the socket at `/run/tty-egpf-monitord.sock` by default.
+
+### Detailed Daemon–CLI model
+- The daemon loads and attaches the eBPF program once, and multiplexes events for multiple ports.
+- You instruct the daemon via the Unix socket to add/remove ports; each port writes to its own NDJSON log.
+- The CLI is a thin client over HTTP/1.1 requests to the Unix socket; it supports bulk log download and live streaming without touching the kernel.
 
 ## License
 GPL-3.0. See LICENSE.
