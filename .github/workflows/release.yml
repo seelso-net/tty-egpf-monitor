@@ -45,7 +45,8 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
-          bpftool \
+          linux-tools-common \
+          linux-tools-generic \
           gnupg \
           apt-utils \
           dpkg-dev \
