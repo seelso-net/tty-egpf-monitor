@@ -111,7 +111,8 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
 {
-    const char *filename = (const char *)(__u64)ctx->args[1];
+    const char *filename;
+    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     struct open_ctx oc = { .filename = filename };
     bpf_map_update_elem(&op_ctx, &tgid, &oc, BPF_ANY);
@@ -184,7 +185,8 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
 SEC("tracepoint/syscalls/sys_enter_close")
 int tp_enter_close(struct trace_event_raw_sys_enter *ctx)
 {
-    __s32 fd = (__s32)ctx->args[0];
+    __s32 fd;
+    bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
@@ -231,9 +233,12 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
 SEC("tracepoint/syscalls/sys_enter_write")
 int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
 {
-    __s32 fd = (__s32)ctx->args[0];
-    const void __user *buf = (const void *)(__u64)ctx->args[1];
-    size_t count = (size_t)ctx->args[2];
+    __s32 fd;
+    const void __user *buf;
+    size_t count;
+    bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+    bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
+    bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
@@ -257,9 +262,12 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
 SEC("tracepoint/syscalls/sys_enter_read")
 int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
 {
-    __s32 fd = (__s32)ctx->args[0];
-    const void __user *buf = (const void *)(__u64)ctx->args[1];
-    size_t count = (size_t)ctx->args[2];
+    __s32 fd;
+    const void __user *buf;
+    size_t count;
+    bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+    bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
+    bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
@@ -278,8 +286,10 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
 SEC("tracepoint/syscalls/sys_enter_ioctl")
 int tp_enter_ioctl(struct trace_event_raw_sys_enter *ctx)
 {
-    __s32 fd = (__s32)ctx->args[0];
-    __u32 cmd = (__u32)ctx->args[1];
+    __s32 fd;
+    __u32 cmd;
+    bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+    bpf_probe_read_kernel(&cmd, sizeof(cmd), &ctx->args[1]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     struct fdkey k = { .tgid = tgid, .fd = fd };
