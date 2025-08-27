@@ -15,8 +15,6 @@ jobs:
         include:
           - codename: noble
             container: ubuntu:24.04
-          - codename: jammy
-            container: ubuntu:22.04
     container: ${{ matrix.container }}
     
     steps:
