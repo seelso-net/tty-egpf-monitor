@@ -48,7 +48,6 @@ jobs:
           build-essential \
           linux-headers-generic \
           libbpf-dev \
-          libbpf1 \
           linux-tools-common \
           linux-tools-generic \
           gnupg \
@@ -57,6 +56,20 @@ jobs:
           debhelper \
           devscripts \
           dh-make
+
+    - name: Install correct libbpf version
+      run: |
+        # Install the correct libbpf version based on Ubuntu version
+        if grep -q "jammy" /etc/os-release; then
+          echo "Ubuntu 22.04 (jammy) detected, installing libbpf0"
+          apt-get install -y libbpf0
+        elif grep -q "noble" /etc/os-release; then
+          echo "Ubuntu 24.04 (noble) detected, installing libbpf1"
+          apt-get install -y libbpf1
+        else
+          echo "Unknown Ubuntu version, trying both"
+          apt-get install -y libbpf0 libbpf1 || true
+        fi
 
     - name: Ensure bpftool
       run: |
