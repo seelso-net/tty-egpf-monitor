@@ -35,8 +35,8 @@ jobs:
 
     - name: Install build dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        apt-get update
+        apt-get install -y \
           clang \
           make \
           libelf-dev \
@@ -56,10 +56,10 @@ jobs:
       run: |
         set -e
         if ! command -v bpftool >/dev/null 2>&1; then
-          sudo apt-get install -y linux-tools-common linux-tools-generic
+          apt-get install -y linux-tools-common linux-tools-generic || true
           BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
           if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
-            sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+            ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
           fi
         fi
         bpftool version || true
@@ -78,8 +78,8 @@ jobs:
 
     - name: Clean Debian outputs
       run: |
-        sudo rm -f ../*.deb ../*.buildinfo ../*.changes || true
-        sudo rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
+        rm -f ../*.deb ../*.buildinfo ../*.changes || true
+        rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
 
     - name: Build Debian package
       run: |
@@ -116,19 +116,20 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           cd -
         }
+        CODENAME='${{ matrix.codename }}'
         mkdir -p /tmp/apt-repo/pool/main
-        mkdir -p /tmp/apt-repo/dists/stable/main/binary-amd64
+        mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
         cp ./*.deb /tmp/apt-repo/pool/main/
         cd /tmp/apt-repo
-        apt-ftparchive packages pool/main > dists/stable/main/binary-amd64/Packages
-        gzip -c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+        apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
+        gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
         apt-ftparchive \
           -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
-          -o APT::FTPArchive::Release::Suite="stable" \
-          -o APT::FTPArchive::Release::Codename="stable" \
+          -o APT::FTPArchive::Release::Suite="${CODENAME}" \
+          -o APT::FTPArchive::Release::Codename="${CODENAME}" \
           -o APT::FTPArchive::Release::Architectures="amd64" \
           -o APT::FTPArchive::Release::Components="main" \
-          release dists/stable > dists/stable/Release
+          release dists/${CODENAME} > dists/${CODENAME}/Release
         touch .nojekyll
         # Publish public key at root for clients (both .asc and .gpg)
         KEYASC=""
@@ -151,11 +152,11 @@ jobs:
         fi
         if [ -n "$GPG_PRIVATE_KEY" ]; then
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/stable/Release.gpg dists/stable/Release
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --clearsign -o dists/stable/InRelease dists/stable/Release || true
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" -abs -o dists/${CODENAME}/Release.gpg dists/${CODENAME}/Release
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --clearsign -o dists/${CODENAME}/InRelease dists/${CODENAME}/Release || true
         fi
         git add -A
-        git commit -m "Update apt repo for ${GITHUB_REF}" || git commit -m "Initialize apt repo"
+        git commit -m "Update apt repo for ${GITHUB_REF} (${CODENAME})" || git commit -m "Initialize apt repo"
         git push -u origin gh-pages
         cd -
     - name: Create GitHub Release
