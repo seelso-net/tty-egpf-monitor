@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     
     steps:
     - name: Checkout code
@@ -33,16 +33,19 @@ jobs:
           zlib1g-dev \
           pkg-config \
           build-essential \
-          linux-headers-$(uname -r) \
-          libbpf-dev
+          libbpf-dev \
+          linux-tools-common linux-tools-generic
 
-    - name: Install bpftool
+    - name: Ensure bpftool
       run: |
-        # Try to install bpftool from package manager first
-        sudo apt-get install -y bpftool || {
-          echo "bpftool not available in package manager, skipping..."
-          echo "This is expected on some Ubuntu versions"
-        }
+        set -e
+        if ! command -v bpftool >/dev/null 2>&1; then
+          BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+          if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+            sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+          fi
+        fi
+        bpftool version || true
 
     - name: Build application
       run: |
@@ -52,26 +55,35 @@ jobs:
     - name: Verify build artifacts
       run: |
         ls -la build/
-        file build/sermon
-        # Check if the binary is executable
-        test -x build/sermon
+        file build/tty-egpf-monitord
+        file build/tty-egpf-monitor
+        # Check if the binaries are executable
+        test -x build/tty-egpf-monitord
+        test -x build/tty-egpf-monitor
 
     - name: Test basic functionality
       run: |
         # Verify binary properties (not executing eBPF programs on runner)
         echo "Binary verification:"
-        file build/sermon
-        echo "Binary size: $(stat -c%s build/sermon) bytes"
-        echo "Binary permissions: $(stat -c%a build/sermon)"
+        file build/tty-egpf-monitord
+        file build/tty-egpf-monitor
+        echo "Monitord size: $(stat -c%s build/tty-egpf-monitord) bytes"
+        echo "CLI size: $(stat -c%s build/tty-egpf-monitor) bytes"
+        echo "Monitord perms: $(stat -c%a build/tty-egpf-monitord)"
+        echo "CLI perms: $(stat -c%a build/tty-egpf-monitor)"
         
         # Test that required libraries are linked
-        ldd build/sermon
+        ldd build/tty-egpf-monitord
+        ldd build/tty-egpf-monitor
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: tty-egpf-monitor-binary
-        path: build/sermon
+        name: tty-egpf-build
+        path: |
+          build/tty-egpf-monitord
+          build/tty-egpf-monitor
+          build/sniffer.bpf.o
         retention-days: 7
 
 
