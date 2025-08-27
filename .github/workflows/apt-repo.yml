@@ -42,8 +42,15 @@ jobs:
           devscripts \
           dh-make \
           reprepro \
-          gnupg2 \
-          bpftool
+          gnupg2
+
+    - name: Install bpftool
+      run: |
+        # Try to install bpftool from package manager first
+        sudo apt-get install -y bpftool || {
+          echo "bpftool not available in package manager, skipping..."
+          echo "This is expected on some Ubuntu versions"
+        }
 
     - name: Build application
       run: |
