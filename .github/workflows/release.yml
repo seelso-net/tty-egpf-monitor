@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        codename: [ noble, jammy ]
+        codename: [ noble ]
         include:
           - codename: noble
             container: ubuntu:24.04
