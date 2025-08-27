@@ -61,15 +61,19 @@ jobs:
       run: |
         # Install the correct libbpf version based on Ubuntu version
         if grep -q "jammy" /etc/os-release; then
-          echo "Ubuntu 22.04 (jammy) detected, installing libbpf0"
-          apt-get install -y libbpf0
+          echo "Ubuntu 22.04 (jammy) detected, installing libbpf0 and libbpf-dev"
+          apt-get install -y libbpf0 libbpf-dev
         elif grep -q "noble" /etc/os-release; then
-          echo "Ubuntu 24.04 (noble) detected, installing libbpf1"
-          apt-get install -y libbpf1
+          echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
+          apt-get install -y libbpf1 libbpf-dev
         else
           echo "Unknown Ubuntu version, trying both"
-          apt-get install -y libbpf0 libbpf1 || true
+          apt-get install -y libbpf0 libbpf1 libbpf-dev || true
         fi
+        
+        # Verify pkg-config finds the correct libbpf
+        echo "Checking pkg-config libbpf configuration:"
+        pkg-config --libs --cflags libbpf
 
     - name: Ensure bpftool
       run: |
