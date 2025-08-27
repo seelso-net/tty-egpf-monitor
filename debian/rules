@@ -12,6 +12,8 @@ override_dh_auto_install:
 	mkdir -p debian/tty-egpf-monitord/lib/systemd/system
 	cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service
 	mkdir -p debian/tty-egpf-monitord/DEBIAN
+	mkdir -p debian/tty-egpf-monitord/run
+	mkdir -p debian/tty-egpf-monitord/var/log/tty-egpf-monitor
 
 override_dh_auto_clean:
 	# Clean build artifacts

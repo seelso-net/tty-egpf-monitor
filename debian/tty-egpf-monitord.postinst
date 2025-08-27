@@ -5,12 +5,15 @@ case "$1" in
   configure)
     # Create runtime socket directory
     install -d -m 0755 /run
+    # Ensure our socket path directory exists
+    install -d -m 0755 /run
     # Create log directory
     install -d -m 0755 /var/log/tty-egpf-monitor
     # Reload and enable systemd unit if available
     if command -v systemctl >/dev/null 2>&1; then
       systemctl daemon-reload || true
       systemctl enable tty-egpf-monitord.service || true
+      systemctl restart tty-egpf-monitord.service || true
     fi
   ;;
  esac

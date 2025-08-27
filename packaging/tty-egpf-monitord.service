@@ -9,7 +9,10 @@ Restart=on-failure
 User=root
 Group=root
 RuntimeDirectory=tty-egpf-monitord
-AmbientCapabilities=CAP_BPF CAP_NET_ADMIN
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
+LimitMEMLOCK=infinity
+RestartSec=2s
 
 [Install]
 WantedBy=multi-user.target
