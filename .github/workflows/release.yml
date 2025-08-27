@@ -148,6 +148,15 @@ jobs:
 
     - name: Build Debian package
       run: |
+        # Set the correct libbpf dependency based on distribution
+        if grep -q "jammy" /etc/os-release; then
+          echo "Setting libbpf0 dependency for jammy"
+          sed -i 's/Depends: ${misc:Depends}, libc6 (>= 2.34), adduser/Depends: ${misc:Depends}, libbpf0 (>= 1:0.5.0), libc6 (>= 2.34), adduser/' debian/control
+        elif grep -q "noble" /etc/os-release; then
+          echo "Setting libbpf1 dependency for noble"
+          sed -i 's/Depends: ${misc:Depends}, libc6 (>= 2.34), adduser/Depends: ${misc:Depends}, libbpf1 (>= 1:0.5.0), libc6 (>= 2.34), adduser/' debian/control
+        fi
+        
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
