@@ -3,7 +3,14 @@
 
 BPF_CLANG ?= clang
 CC ?= cc
-BPFTOOL ?= bpftool
+# Find working bpftool - prefer specific paths over the wrapper script
+BPFTOOL ?= $(shell \
+	for bpf in /usr/local/sbin/bpftool /usr/local/bin/bpftool $(shell find /usr/lib/linux-tools-* -name bpftool 2>/dev/null | head -1) bpftool; do \
+		if $$bpf version >/dev/null 2>&1; then \
+			echo $$bpf; \
+			break; \
+		fi; \
+	done)
 
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),x86_64)
