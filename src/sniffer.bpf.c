@@ -83,6 +83,9 @@ struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u
 /* Per-CPU scratch buffers (avoid stack usage) */
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, 1); } scratch1 SEC(".maps");
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, 1); } scratch2 SEC(".maps");
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct read_ctx); __uint(max_entries, 1); } scratch3 SEC(".maps");
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct open_ctx); __uint(max_entries, 1); } scratch4 SEC(".maps");
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct close_ctx); __uint(max_entries, 1); } scratch5 SEC(".maps");
 
 /* Optional: orchestrator tgid (for parity with earlier version) */
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u32); __uint(max_entries, 1); } orchestrator_tgid SEC(".maps");
@@ -126,9 +129,12 @@ int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
     const char *filename;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    struct open_ctx oc;
-    oc.filename = filename;
-    bpf_map_update_elem(&op_ctx, &tgid, &oc, BPF_ANY);
+    /* Use scratch buffer to avoid stack access issues */
+    __u32 k0 = 0;
+    struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
+    if (!oc) return 0;
+    oc->filename = filename;
+    bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
     return 0;
 }
 
@@ -203,9 +209,12 @@ int tp_enter_close(struct trace_event_raw_sys_enter *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
-    struct close_ctx cc;
-    cc.fd = fd;
-    bpf_map_update_elem(&cl_ctx, &tgid, &cc, BPF_ANY);
+    /* Use scratch buffer to avoid stack access issues */
+    __u32 k0 = 0;
+    struct close_ctx *cc = bpf_map_lookup_elem(&scratch5, &k0);
+    if (!cc) return 0;
+    cc->fd = fd;
+    bpf_map_update_elem(&cl_ctx, &tgid, cc, BPF_ANY);
     return 0;
 }
 
@@ -286,12 +295,15 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     /* Always store read context, check interest in exit */
-    /* Use individual field assignment to avoid stack access issues */
-    struct read_ctx rc;
-    rc.fd = fd;
-    rc.buf = buf;
-    rc.count = count;
-    bpf_map_update_elem(&rd_ctx, &tgid, &rc, BPF_ANY);
+    /* Use scratch buffer to avoid stack access issues */
+    __u32 k0 = 0;
+    struct read_ctx *rc = bpf_map_lookup_elem(&scratch3, &k0);
+    if (!rc) return 0;
+    
+    rc->fd = fd;
+    rc->buf = buf;
+    rc->count = count;
+    bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
     return 0;
 }
 
