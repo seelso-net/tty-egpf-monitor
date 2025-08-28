@@ -121,8 +121,8 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
 static __always_inline int basename_offset(const char *p)
 {
     int last = 0;
-#pragma unroll
-    for (int i = 0; i < MAX_PATH; i++) {
+    /* Use bounded loop to avoid verifier complexity */
+    for (int i = 0; i < 64; i++) {  /* Limit to reasonable path length */
         char c = ((const volatile char *)p)[i];
         if (c == '\0') break;
         if (c == '/') last = i + 1;
