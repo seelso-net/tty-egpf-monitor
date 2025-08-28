@@ -10,7 +10,19 @@ override_dh_auto_install:
 	cp build/tty-egpf-monitord debian/tty-egpf-monitord/usr/bin/tty-egpf-monitord
 	cp build/tty-egpf-monitor debian/tty-egpf-monitor-cli/usr/bin/tty-egpf-monitor
 	mkdir -p debian/tty-egpf-monitord/lib/systemd/system
-	cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service
+	# Select appropriate systemd service file based on target distribution
+	if [ -f /etc/os-release ]; then \
+		. /etc/os-release; \
+		if [ "$$VERSION_ID" = "22.04" ] && [ -f packaging/tty-egpf-monitord.service.jammy ]; then \
+			cp -a packaging/tty-egpf-monitord.service.jammy debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service; \
+		elif [ "$$VERSION_ID" = "24.04" ] && [ -f packaging/tty-egpf-monitord.service.noble ]; then \
+			cp -a packaging/tty-egpf-monitord.service.noble debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service; \
+		else \
+			cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service; \
+		fi; \
+	else \
+		cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service; \
+	fi
 	mkdir -p debian/tty-egpf-monitord/DEBIAN
 	mkdir -p debian/tty-egpf-monitord/run
 	mkdir -p debian/tty-egpf-monitord/var/log/tty-egpf-monitor

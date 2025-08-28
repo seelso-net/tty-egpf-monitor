@@ -17,11 +17,11 @@
         <div class="section">
             <h2>Installation</h2>
             <p>Add this repository to your system:</p>
-            <pre><code># Add GPG key
-wget -O - https://seelso-net.github.io/tty-egpf-monitor/public-apt-key.asc | sudo apt-key add -
+            <pre><code># Add GPG key (using modern signed-by method)
+wget -O - https://seelso-net.github.io/tty-egpf-monitor/public-apt-key.asc | gpg --dearmor | sudo tee /usr/share/keyrings/tty-egpf-monitor-archive-keyring.gpg > /dev/null
 
-# Add repository
-echo "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+# Add repository with signed-by option
+echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor-archive-keyring.gpg] https://seelso-net.github.io/tty-egpf-monitor $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 
 # Update and install
 sudo apt-get update

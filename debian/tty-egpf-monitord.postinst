@@ -9,9 +9,22 @@ case "$1" in
     install -d -m 0755 /run
     # Create log directory
     install -d -m 0755 /var/log/tty-egpf-monitor
-    # Set capabilities for eBPF access
+    # Set capabilities for eBPF access based on Ubuntu version
     if command -v setcap >/dev/null 2>&1; then
-      setcap cap_bpf,cap_perfmon,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
+      # Check Ubuntu version
+      if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ "$VERSION_ID" = "22.04" ]; then
+          # Ubuntu 22.04 doesn't support CAP_BPF, use CAP_SYS_ADMIN
+          setcap cap_sys_admin,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
+        else
+          # Ubuntu 24.04 and newer support CAP_BPF
+          setcap cap_bpf,cap_perfmon,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
+        fi
+      else
+        # Default to newer capabilities
+        setcap cap_bpf,cap_perfmon,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
+      fi
     fi
     # Configure kernel for eBPF access
     echo 1 > /proc/sys/kernel/unprivileged_bpf_disabled 2>/dev/null || true
