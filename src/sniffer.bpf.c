@@ -13,6 +13,7 @@ typedef signed char        __s8;
 typedef short              __s16;
 typedef int                __s32;
 typedef long long          __s64;
+
 #endif
 #ifndef __user
 #define __user
@@ -183,12 +184,14 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
         }
 
-        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-        if (!e) return 0;
-        fill_common(e, EV_OPEN);
-        e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = matched_idx >= 0 ? (unsigned)matched_idx : 0;
-        e->data_len = 0; e->data_trunc = 0;
-        bpf_ringbuf_submit(e, 0);
+        if (matched_idx >= 0) {
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            if (!e) return 0;
+            fill_common(e, EV_OPEN);
+            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = (unsigned)matched_idx;
+            e->data_len = 0; e->data_trunc = 0;
+            bpf_ringbuf_submit(e, 0);
+        }
     }
     return 0;
 }
@@ -240,12 +243,14 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
         bpf_map_delete_elem(&fd_interest, &k); /* unmark fd */
         if (idxp) bpf_map_delete_elem(&fd_portidx, &k);
 
-        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-        if (e) {
-            fill_common(e, EV_CLOSE);
-            e->cmd = 0; e->ret = 0; e->dir = 0; e->port_idx = idxp ? *idxp : 0;
-            e->data_len = 0; e->data_trunc = 0;
-            bpf_ringbuf_submit(e, 0);
+        if (idxp) {
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            if (e) {
+                fill_common(e, EV_CLOSE);
+                e->cmd = 0; e->ret = 0; e->dir = 0; e->port_idx = *idxp;
+                e->data_len = 0; e->data_trunc = 0;
+                bpf_ringbuf_submit(e, 0);
+            }
         }
     }
     return 0;

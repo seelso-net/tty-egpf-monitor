@@ -26,7 +26,10 @@
 #include "sniffer.skel.h"
 
 #define MAX_PORTS 16
+#define MAX_PATH 256
+struct pathval { char path[MAX_PATH]; };
 #define DEFAULT_HTTP_PORT 12768
+#define CONFIG_FILE "/var/log/tty-egpf-monitor/daemon.conf"
 #define DEFAULT_SOCKET_PATH "/run/tty-egpf-monitord.sock"
 #define DEFAULT_LOG_DIR "/var/log/tty-egpf-monitor"
 
@@ -57,12 +60,19 @@ static uint32_t target_count = 0;
 static char g_socket_path[256] = DEFAULT_SOCKET_PATH;
 static char g_log_dir[256] = DEFAULT_LOG_DIR;
 
+// Forward declarations
+static void save_config(void);
+static void load_config(void);
+
 static void log_event_json(const struct event *e)
 {
     uint32_t idx = e->port_idx;
     if (idx >= MAX_PORTS) return;
     FILE *f = port_logs[idx];
-    if (!f) return;
+    if (!f) {
+        fprintf(stderr, "DEBUG: No log file for port_idx=%u\n", idx);
+        return;
+    }
     struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
     const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
     fprintf(f,
@@ -89,6 +99,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
+    fprintf(stderr, "DEBUG: Event type=%d, port_idx=%u, comm=%.16s\n", e->type, e->port_idx, e->comm);
     log_event_json(e);
     pthread_mutex_unlock(&ports_mu);
     return 0;
@@ -133,7 +144,111 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     int rc = sync_targets_map();
     pthread_mutex_unlock(&ports_mu);
     if (rc) { snprintf(err, errsz, "sync map failed"); return -1; }
+    
+    // Save configuration after adding port
+    save_config();
+    
     return (int)idx;
+}
+
+static void save_config(void)
+{
+    FILE *f = fopen(CONFIG_FILE, "w");
+    if (!f) {
+        fprintf(stderr, "DEBUG: Failed to save config: %s\n", strerror(errno));
+        return;
+    }
+    
+    fprintf(f, "target_count=%u\n", target_count);
+    for (uint32_t i = 0; i < target_count; i++) {
+        fprintf(f, "port[%u]=%s\n", i, ports[i]);
+        fprintf(f, "log_path[%u]=%s\n", i, log_paths[i]);
+    }
+    fclose(f);
+    fprintf(stderr, "DEBUG: Configuration saved to %s\n", CONFIG_FILE);
+}
+
+static void load_config(void)
+{
+    FILE *f = fopen(CONFIG_FILE, "r");
+    if (!f) {
+        fprintf(stderr, "DEBUG: No config file found: %s\n", CONFIG_FILE);
+        return;
+    }
+    
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\n")] = 0; // Remove newline
+        
+        if (strncmp(line, "target_count=", 13) == 0) {
+            target_count = atoi(line + 13);
+            fprintf(stderr, "DEBUG: Loaded target_count=%u\n", target_count);
+        } else if (strncmp(line, "port[", 5) == 0) {
+            int idx;
+            char path[256];
+            if (sscanf(line, "port[%d]=%s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
+                snprintf(ports[idx], sizeof(ports[idx]), "%s", path);
+                fprintf(stderr, "DEBUG: Loaded port[%d]=%s\n", idx, ports[idx]);
+            }
+        } else if (strncmp(line, "log_path[", 9) == 0) {
+            int idx;
+            char path[512];
+            if (sscanf(line, "log_path[%d]=%s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
+                snprintf(log_paths[idx], sizeof(log_paths[idx]), "%s", path);
+                fprintf(stderr, "DEBUG: Loaded log_path[%d]=%s\n", idx, log_paths[idx]);
+            }
+        }
+    }
+    fclose(f);
+    fprintf(stderr, "DEBUG: Configuration loaded from %s\n", CONFIG_FILE);
+}
+
+static void reopen_existing_logs(void)
+{
+    fprintf(stderr, "DEBUG: reopen_existing_logs called, target_count=%u\n", target_count);
+    
+    // Load configuration from file
+    load_config();
+    
+    // Sync the loaded configuration to BPF maps
+    int tp_fd = bpf_map__fd(g_skel->maps.target_path);
+    int tc_fd = bpf_map__fd(g_skel->maps.target_count);
+    
+    if (tp_fd >= 0 && tc_fd >= 0) {
+        // Update target_count in BPF map
+        uint32_t k0 = 0;
+        if (bpf_map_update_elem(tc_fd, &k0, &target_count, BPF_ANY) == 0) {
+            fprintf(stderr, "DEBUG: Updated BPF map target_count=%u\n", target_count);
+        }
+        
+        // Update port configurations in BPF map
+        for (uint32_t i = 0; i < target_count; i++) {
+            if (ports[i][0] != '\0') {
+                struct pathval tp;
+                snprintf(tp.path, sizeof(tp.path), "%s", ports[i]);
+                if (bpf_map_update_elem(tp_fd, &i, &tp, BPF_ANY) == 0) {
+                    fprintf(stderr, "DEBUG: Updated BPF map port[%u]='%s'\n", i, ports[i]);
+                }
+            }
+        }
+    }
+    
+    pthread_mutex_lock(&ports_mu);
+    for (uint32_t i = 0; i < target_count; i++) {
+        fprintf(stderr, "DEBUG: Checking port[%u]='%s', log_paths[%u]='%s', port_logs[%u]=%p\n", 
+                i, ports[i], i, log_paths[i], i, port_logs[i]);
+        if (ports[i][0] != '\0' && !port_logs[i]) {
+            // Reopen log file for this port
+            FILE *f = fopen(log_paths[i], "a");
+            if (f) {
+                port_logs[i] = f;
+                fprintf(stderr, "DEBUG: Reopened log file for port %s\n", ports[i]);
+            } else {
+                fprintf(stderr, "DEBUG: Failed to reopen log file for port %s: %s\n", ports[i], strerror(errno));
+            }
+        }
+    }
+    pthread_mutex_unlock(&ports_mu);
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)
@@ -318,7 +433,13 @@ static void handle_http_client(int cfd)
         if (lp) {
             lp = strchr(lp, ':'); if (lp) { lp++; while (*lp==' '||*lp=='\t') lp++; if (*lp=='\"') { lp++; char *e=strchr(lp,'\"'); if (e) { size_t l=e-lp; if (l>=sizeof(logp)) l=sizeof(logp)-1; memcpy(logp,lp,l); } } }
         }
-        if (!dev[0] || !logp[0]) { http_send(cfd, 400, "text/plain", "missing dev/log"); close(cfd); return; }
+        if (!dev[0]) { http_send(cfd, 400, "text/plain", "missing dev"); close(cfd); return; }
+        // Generate default log path if not provided
+        if (!logp[0]) {
+            const char *base = strrchr(dev, '/');
+            base = base ? base + 1 : dev;
+            snprintf(logp, sizeof(logp), "%s/%s.jsonl", g_log_dir, base);
+        }
         char err[128];
         int idx = api_add_port(dev, logp, err, sizeof err);
         if (idx < 0) { http_send(cfd, 400, "text/plain", err); }
@@ -473,6 +594,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "attach failed (err=%d): %s\n", attach_err, strerror(-attach_err));
         return 1; 
     }
+
+    // Reopen log files for already configured ports
+    reopen_existing_logs();
 
     g_rb = ring_buffer__new(bpf_map__fd(g_skel->maps.events), handle_event, NULL, NULL);
     if (!g_rb) { fprintf(stderr, "ring_buffer__new failed\n"); return 1; }
