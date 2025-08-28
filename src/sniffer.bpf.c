@@ -121,11 +121,29 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
     return 1;
 }
 
+/* basename comparison removed (verifier-safe exact match is used) */
+
 /* (removed basename_offset function - using exact path matching only) */
 
 /* ---------- sys_enter_openat ---------- */
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
+{
+    const char *filename;
+    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    /* Use scratch buffer to avoid stack access issues */
+    __u32 k0 = 0;
+    struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
+    if (!oc) return 0;
+    oc->filename = filename;
+    bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
+    return 0;
+}
+
+/* ---------- sys_enter_openat2 ---------- */
+SEC("tracepoint/syscalls/sys_enter_openat2")
+int tp_enter_openat2(struct trace_event_raw_sys_enter *ctx)
 {
     const char *filename;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
@@ -178,6 +196,63 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             struct fdkey k;
     k.tgid = tgid;
     k.fd = (__s32)ret;
+            __u8 one = 1;
+            __u32 midx = (unsigned)matched_idx;
+            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+        }
+
+        if (matched_idx >= 0) {
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            if (!e) return 0;
+            fill_common(e, EV_OPEN);
+            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = (unsigned)matched_idx;
+            e->data_len = 0; e->data_trunc = 0;
+            bpf_ringbuf_submit(e, 0);
+        }
+    }
+    return 0;
+}
+
+/* ---------- sys_exit_openat2 ---------- */
+SEC("tracepoint/syscalls/sys_exit_openat2")
+int tp_exit_openat2(struct trace_event_raw_sys_exit *ctx)
+{
+    __s64 ret;
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret); /* new fd if >=0 */
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+
+    struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
+    if (!oc) return 0;
+
+    __u32 k0 = 0;
+
+    /* scratch2 := user path (from userspace pointer) */
+    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+    if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
+    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
+    bpf_map_delete_elem(&op_ctx, &tgid);
+    if (glen <= 0) return 0;
+
+    if (ret >= 0) {
+        /* Match path against configured targets and set fd maps */
+        __s32 matched_idx = -1;
+#pragma unroll
+        for (int i = 0; i < MAX_TARGETS; i++) {
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
+            __u32 ki = i;
+            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+            if (!tpv) continue;
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+            if (sw->path[0] == '\0') continue; /* unused slot */
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+        }
+
+        if (matched_idx >= 0) {
+            struct fdkey k;
+            k.tgid = tgid;
+            k.fd = (__s32)ret;
             __u8 one = 1;
             __u32 midx = (unsigned)matched_idx;
             bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
