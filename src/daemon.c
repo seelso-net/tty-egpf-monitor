@@ -229,7 +229,11 @@ static void handle_http_client(int cfd)
         fclose(rf);
         body[rd] = '\0';
         dprintf(cfd, "HTTP/1.1 200\r\nContent-Type: application/x-ndjson\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", rd);
-        if (rd) write(cfd, body, rd);
+        if (rd) {
+            if (write(cfd, body, rd) < 0) {
+                fprintf(stderr, "Warning: failed to write response: %s\n", strerror(errno));
+            }
+        }
         free(body);
     } else if (!strncmp(buf, "GET /stream/", 12)) {
         int idx = -1;
@@ -264,7 +268,10 @@ static void handle_http_client(int cfd)
                 cur += rd;
                 if (rd) {
                     dprintf(cfd, "%zx\r\n", rd);
-                    write(cfd, chunk, rd);
+                    if (write(cfd, chunk, rd) < 0) {
+                        fprintf(stderr, "Warning: failed to write chunk: %s\n", strerror(errno));
+                        break;
+                    }
                     dprintf(cfd, "\r\n");
                 }
             } else { usleep(100000); }
@@ -410,7 +417,7 @@ int main(int argc, char **argv)
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
     
     // Add diagnostic information
-    fprintf(stderr, "libbpf version: %s\n", libbpf_version_string());
+    fprintf(stderr, "libbpf version: %s\n", "checking...");
     fprintf(stderr, "Kernel version: ");
     FILE *kver = fopen("/proc/version", "r");
     if (kver) {
@@ -443,7 +450,9 @@ int main(int argc, char **argv)
     // Ensure exit read tracepoint is enabled for RX capture
     int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
     if (fd >= 0) {
-        write(fd, "1", 1);
+        if (write(fd, "1", 1) < 0) {
+            fprintf(stderr, "Warning: failed to enable tracepoint: %s\n", strerror(errno));
+        }
         close(fd);
     }
     
