@@ -54,7 +54,7 @@ struct fdkey { __u32 tgid; __s32 fd; };
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_interest SEC(".maps");
 
 /* read() entry ctx: capture userspace buffer pointer by (tgid, fd) */
-struct read_ctx { const void *buf; size_t count; };
+struct read_ctx { __s32 fd; const void *buf; size_t count; };
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, struct read_ctx); __uint(max_entries, 65536); } rd_ctx SEC(".maps");
 
 /* openat() entry ctx: save filename pointer by tgid */
@@ -274,13 +274,58 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
     __u8 *hit = bpf_map_lookup_elem(&fd_interest, &k);
     if (!hit) return 0;
 
-    struct read_ctx rc = { .buf = buf, .count = count };
+    struct read_ctx rc = { .fd = fd, .buf = buf, .count = count };
     bpf_map_update_elem(&rd_ctx, &k, &rc, BPF_ANY);
     return 0;
 }
 
 /* (Optional) sys_exit_read could copy dev->app bytes using the recorded buf+ret
-   If you want that too, I’ll extend this with a small per-task slot for the fd. */
+   If you want that too, I'll extend this with a small per-task slot for the fd. */
+
+/* ---------- sys_exit_read: device -> app (capture actual data) ---------- */
+SEC("tracepoint/syscalls/sys_exit_read")
+int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
+{
+    __s64 ret;
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+
+    /* Find the read context we saved on enter */
+    struct fdkey k = { .tgid = tgid, .fd = 0 }; /* fd will be filled from context */
+    struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &k);
+    if (!rc) return 0;
+
+    /* Check if this fd is of interest */
+    k.fd = rc->fd;
+    __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+    if (!idxp) {
+        bpf_map_delete_elem(&rd_ctx, &k);
+        return 0;
+    }
+
+    /* Only report successful reads with data */
+    if (ret <= 0) {
+        bpf_map_delete_elem(&rd_ctx, &k);
+        return 0;
+    }
+
+    size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (!e) {
+        bpf_map_delete_elem(&rd_ctx, &k);
+        return 0;
+    }
+
+    fill_common(e, EV_READ);
+    e->dir = 0; e->ret = ret; e->cmd = 0;
+    e->port_idx = *idxp;
+    e->data_len = cap; e->data_trunc = ret > MAX_DATA ? (ret - MAX_DATA) : 0;
+    if (cap && rc->buf) bpf_probe_read_user(e->data, cap, rc->buf);
+    bpf_ringbuf_submit(e, 0);
+
+    bpf_map_delete_elem(&rd_ctx, &k);
+    return 0;
+}
 
 /* ---------- sys_enter_ioctl ---------- */
 SEC("tracepoint/syscalls/sys_enter_ioctl")

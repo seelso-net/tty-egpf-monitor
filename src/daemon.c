@@ -189,82 +189,83 @@ static void handle_http_client(int cfd)
         off += snprintf(body+off, sizeof(body)-off, "]");
         pthread_mutex_unlock(&ports_mu);
         http_send(cfd, 200, "application/json", body);
-    } else if (!strncmp(buf, "GET /logs/", 11)) {
+    } else if (!strncmp(buf, "GET /logs/", 10)) {
         int idx = -1;
-        const char *p = buf + 11;
+        const char *p = buf + 10;
         if (*p >= '0' && *p <= '9') { idx = atoi(p); }
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
+
+        /* Copy log path under lock, then read using a separate handle */
+        char logpath_local[512] = {0};
         pthread_mutex_lock(&ports_mu);
-        FILE *f = port_logs[idx];
-        if (!f) {
-            // Try to reopen the log file if it was closed (e.g., after daemon restart)
-            const char *devpath = ports[idx];
-            if (devpath[0] != '\0' && log_paths[idx][0] != '\0') {
-                f = fopen(log_paths[idx], "r");
-                if (f) {
-                    // Store the reopened file for reading
-                    port_logs[idx] = f;
-                }
-            }
+        if (log_paths[idx][0] != '\0') {
+            snprintf(logpath_local, sizeof(logpath_local), "%s", log_paths[idx]);
+        } else if (ports[idx][0] != '\0') {
+            const char *base = strrchr(ports[idx], '/');
+            base = base ? base + 1 : ports[idx];
+            snprintf(logpath_local, sizeof(logpath_local), "%s/%s.jsonl", g_log_dir, base);
         }
-        if (!f) { pthread_mutex_unlock(&ports_mu); http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
-        int fd = fileno(f);
-        off_t cur = lseek(fd, 0, SEEK_CUR);
-        off_t sz = lseek(fd, 0, SEEK_END);
-        lseek(fd, 0, SEEK_SET);
-        char *body = NULL; size_t blen = (size_t)sz;
-        body = (char*)malloc(blen + 1);
-        if (!body) { lseek(fd, cur, SEEK_SET); pthread_mutex_unlock(&ports_mu); http_send(cfd, 500, "text/plain", "oom"); close(cfd); return; }
-        size_t rd = fread(body, 1, blen, f);
-        lseek(fd, cur, SEEK_SET);
         pthread_mutex_unlock(&ports_mu);
+
+        if (!logpath_local[0]) { 
+            http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; 
+        }
+
+        FILE *rf = fopen(logpath_local, "r");
+        if (!rf) { 
+            http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; 
+        }
+        int rfd = fileno(rf);
+        off_t sz = lseek(rfd, 0, SEEK_END);
+        lseek(rfd, 0, SEEK_SET);
+        if (sz < 0) { fclose(rf); http_send(cfd, 500, "text/plain", "seek fail"); close(cfd); return; }
+        char *body = (char*)malloc((size_t)sz + 1);
+        if (!body) { fclose(rf); http_send(cfd, 500, "text/plain", "oom"); close(cfd); return; }
+        size_t rd = fread(body, 1, (size_t)sz, rf);
+        fclose(rf);
         body[rd] = '\0';
         dprintf(cfd, "HTTP/1.1 200\r\nContent-Type: application/x-ndjson\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", rd);
         if (rd) write(cfd, body, rd);
         free(body);
-    } else if (!strncmp(buf, "GET /stream/", 13)) {
+    } else if (!strncmp(buf, "GET /stream/", 12)) {
         int idx = -1;
-        const char *p = buf + 13;
+        const char *p = buf + 12;
         if (*p >= '0' && *p <= '9') { idx = atoi(p); }
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
+
+        char logpath_local[512] = {0};
         pthread_mutex_lock(&ports_mu);
-        FILE *f = port_logs[idx];
-        if (!f) {
-            // Try to reopen the log file if it was closed (e.g., after daemon restart)
-            const char *devpath = ports[idx];
-            if (devpath[0] != '\0' && log_paths[idx][0] != '\0') {
-                f = fopen(log_paths[idx], "r");
-                if (f) {
-                    // Store the reopened file for reading
-                    port_logs[idx] = f;
-                }
-            }
+        if (log_paths[idx][0] != '\0') {
+            snprintf(logpath_local, sizeof(logpath_local), "%s", log_paths[idx]);
+        } else if (ports[idx][0] != '\0') {
+            const char *base = strrchr(ports[idx], '/');
+            base = base ? base + 1 : ports[idx];
+            snprintf(logpath_local, sizeof(logpath_local), "%s/%s.jsonl", g_log_dir, base);
         }
-        if (!f) { pthread_mutex_unlock(&ports_mu); http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
-        int fd = fileno(f);
-        off_t cur = lseek(fd, 0, SEEK_END);
         pthread_mutex_unlock(&ports_mu);
+        if (!logpath_local[0]) { http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
+
+        FILE *rf = fopen(logpath_local, "r");
+        if (!rf) { http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
+        int rfd = fileno(rf);
+        off_t cur = lseek(rfd, 0, SEEK_END);
         dprintf(cfd, "HTTP/1.1 200\r\nContent-Type: application/x-ndjson\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n");
         char chunk[4096];
         while (!stop_flag) {
-            pthread_mutex_lock(&ports_mu);
-            f = port_logs[idx];
-            if (!f) { pthread_mutex_unlock(&ports_mu); break; }
-            int fd2 = fileno(f);
-            off_t end = lseek(fd2, 0, SEEK_END);
+            off_t end = lseek(rfd, 0, SEEK_END);
             if (end > cur) {
                 size_t toread = (size_t)((end - cur) > (off_t)sizeof(chunk) ? sizeof(chunk) : (end - cur));
-                lseek(fd2, cur, SEEK_SET);
-                size_t rd = fread(chunk, 1, toread, f);
+                lseek(rfd, cur, SEEK_SET);
+                size_t rd = fread(chunk, 1, toread, rf);
                 cur += rd;
-                pthread_mutex_unlock(&ports_mu);
                 if (rd) {
                     dprintf(cfd, "%zx\r\n", rd);
                     write(cfd, chunk, rd);
                     dprintf(cfd, "\r\n");
                 }
-            } else { pthread_mutex_unlock(&ports_mu); usleep(100000); }
+            } else { usleep(100000); }
         }
+        fclose(rf);
         dprintf(cfd, "0\r\n\r\n");
     } else if (!strncmp(buf, "DELETE /ports/", 15)) {
         int idx = -1;
