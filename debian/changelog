@@ -1,3 +1,15 @@
+tty-egpf-monitor (1.1.0-1) unstable; urgency=medium
+
+  * Add Ubuntu 22.04 (Jammy) compatibility
+  * Fix exit status 127 on systems without CAP_BPF capability
+  * Add OS-specific package dependencies (libbpf0 vs libbpf1)
+  * Implement automatic OS detection in build and install scripts
+  * Add APT repository support with GPG signing
+  * Create comprehensive testing framework for multi-Ubuntu support
+  * Add detailed Ubuntu compatibility documentation
+
+ -- Adrian <adrian@example.com>  Fri, 29 Aug 2025 01:31:43 +0200
+
 tty-egpf-monitor (1.0.0-1) unstable; urgency=medium
 
   * Initial release
