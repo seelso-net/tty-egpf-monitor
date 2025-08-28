@@ -267,9 +267,9 @@ static void handle_http_client(int cfd)
         }
         fclose(rf);
         dprintf(cfd, "0\r\n\r\n");
-    } else if (!strncmp(buf, "DELETE /ports/", 15)) {
+    } else if (!strncmp(buf, "DELETE /ports/", 14)) {
         int idx = -1;
-        const char *p = buf + 15;
+        const char *p = buf + 14;
         if (*p >= '0' && *p <= '9') idx = atoi(p);
         char err[128];
         if (idx < 0) { http_send(cfd, 400, "text/plain", "bad index"); }
