@@ -194,8 +194,8 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
 
         if (matched_idx >= 0) {
             struct fdkey k;
-    k.tgid = tgid;
-    k.fd = (__s32)ret;
+            k.tgid = tgid;
+            k.fd = (__s32)ret;
             __u8 one = 1;
             __u32 midx = (unsigned)matched_idx;
             bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
