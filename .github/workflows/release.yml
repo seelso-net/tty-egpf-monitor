@@ -6,7 +6,8 @@ on:
       - 'v*'
 
 jobs:
-  build-and-release:
+  # Build for Ubuntu 24.04 (noble) - existing job
+  build-noble:
     runs-on: ubuntu-24.04
     container: ubuntu:24.04
     permissions:
@@ -128,7 +129,7 @@ jobs:
 
     - name: Build Debian package
       run: |
-        echo "Building package with flexible libbpf dependency (libbpf0 | libbpf1)"
+        echo "Building package for Ubuntu 24.04 (noble)"
         echo "Final debian/control:"
         cat debian/control
         
@@ -138,6 +139,170 @@ jobs:
     - name: Copy Debian packages to workspace
       run: |
         cp ../*.deb .
+
+    - name: Upload noble packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: noble-packages
+        path: '*.deb'
+
+  # Build for Ubuntu 22.04 (jammy) - new job
+  build-jammy:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: |
+        apt-get update
+        apt-get install -y \
+          git \
+          clang \
+          make \
+          flex \
+          bison \
+          libreadline-dev \
+          libcap-dev \
+          libelf-dev \
+          zlib1g-dev \
+          pkg-config \
+          build-essential \
+          linux-headers-generic \
+          libbpf-dev \
+          libsystemd-dev \
+          linux-tools-common \
+          linux-tools-generic \
+          gnupg \
+          apt-utils \
+          dpkg-dev \
+          debhelper \
+          devscripts \
+          dh-make
+
+    - name: Install correct libbpf version
+      run: |
+        # For jammy, ensure we have libbpf0
+        echo "Ubuntu 22.04 (jammy) detected, installing libbpf0 and libbpf-dev"
+        apt-get install -y libbpf0 libbpf-dev
+        
+        # Remove libbpf1 if it exists to ensure we link against libbpf0
+        apt-get remove -y libbpf1 || true
+        apt-get autoremove -y
+        
+        # Verify pkg-config finds the correct libbpf
+        echo "Checking pkg-config libbpf configuration:"
+        pkg-config --libs --cflags libbpf
+
+    - name: Ensure bpftool
+      run: |
+        set -e
+        echo "Checking for bpftool..."
+        if command -v bpftool >/dev/null 2>&1; then
+          echo "bpftool already available: $(bpftool version)"
+          exit 0
+        fi
+
+        echo "bpftool not found, installing..."
+        
+        # First, try to find any existing bpftool in linux-tools directories
+        BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+        if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+          echo "Found existing bpftool in $BPFDIR"
+          ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+          bpftool version
+          exit 0
+        fi
+        
+        # Try to install any available linux-tools packages
+        echo "Trying to install available linux-tools packages..."
+        apt-get update >/dev/null 2>&1
+        
+        # Find available linux-tools packages and install them
+        AVAILABLE_TOOLS=$(apt-cache search "^linux-tools-[0-9]" | grep -o "linux-tools-[0-9][^ ]*" | head -5)
+        for pkg in $AVAILABLE_TOOLS; do
+          echo "Trying to install $pkg..."
+          if apt-get install -y "$pkg" >/dev/null 2>&1; then
+            echo "Successfully installed $pkg"
+            # Check if it provided bpftool
+            BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+            if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+              ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+              bpftool version
+              exit 0
+            fi
+          fi
+        done
+        
+        # If all else fails, build from source
+        echo "No distro bpftool found, building from source..."
+        rm -rf /tmp/bpftool-src
+        git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
+        make -C /tmp/bpftool-src -j$(nproc)
+        install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        rm -rf /tmp/bpftool-src
+        
+        echo "Verifying bpftool installation..."
+        bpftool version
+
+    - name: Build application
+      run: |
+        make clean
+        make
+
+    - name: Update changelog with version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
+        sed -i "s/$(date -R)/$(date -R)/" debian/changelog
+
+    - name: Use jammy control file
+      run: |
+        cp debian/control.jammy debian/control
+
+    - name: Clean Debian outputs
+      run: |
+        rm -f ../*.deb ../*.buildinfo ../*.changes || true
+        rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
+
+    - name: Build Debian package
+      run: |
+        echo "Building package for Ubuntu 22.04 (jammy)"
+        echo "Final debian/control:"
+        cat debian/control
+        
+        dpkg-buildpackage -b -us -uc
+        ls -la ../*.deb
+
+    - name: Copy Debian packages to workspace
+      run: |
+        cp ../*.deb .
+
+    - name: Upload jammy packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: jammy-packages
+        path: '*.deb'
+
+  # Publish apt repository - modified to handle both packages
+  publish-apt-repo:
+    needs: [build-noble, build-jammy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all packages
+      uses: actions/download-artifact@v3
+      with:
+        path: packages
 
     - name: Publish apt repo to gh-pages
       env:
@@ -159,12 +324,18 @@ jobs:
           cd -
         }
 
-        # Create pool directory
-        mkdir -p /tmp/apt-repo/pool/main
-        cp *.deb /tmp/apt-repo/pool/main/ 2>/dev/null || true
+        # Create separate pool directories for each distribution
+        mkdir -p /tmp/apt-repo/pool/noble
+        mkdir -p /tmp/apt-repo/pool/jammy
         
-        echo "Packages in pool:"
-        ls -la /tmp/apt-repo/pool/main/ 2>/dev/null || echo "No packages"
+        # Copy packages to their respective pools
+        cp packages/noble-packages/*.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
+        cp packages/jammy-packages/*.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
+        
+        echo "Packages in noble pool:"
+        ls -la /tmp/apt-repo/pool/noble/ 2>/dev/null || echo "No noble packages"
+        echo "Packages in jammy pool:"
+        ls -la /tmp/apt-repo/pool/jammy/ 2>/dev/null || echo "No jammy packages"
 
         # Update packages for both codenames
         for CODENAME in noble jammy; do
@@ -172,7 +343,9 @@ jobs:
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
           cd /tmp/apt-repo
           
-          apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
+          # Use codename-specific pool
+          apt-ftparchive packages pool/${CODENAME} > dists/${CODENAME}/main/binary-amd64/Packages
+          
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
           apt-ftparchive \
             -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
@@ -225,7 +398,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: '*.deb'
+        files: 'packages/*/*.deb'
         generate_release_notes: true
         draft: false
         prerelease: false
