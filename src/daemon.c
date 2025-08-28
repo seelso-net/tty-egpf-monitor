@@ -465,19 +465,39 @@ int main(int argc, char **argv)
     g_rb = ring_buffer__new(bpf_map__fd(g_skel->maps.events), handle_event, NULL, NULL);
     if (!g_rb) { fprintf(stderr, "ring_buffer__new failed\n"); return 1; }
 
+    fprintf(stderr, "BPF program loaded and attached successfully\n");
+    fprintf(stderr, "Ring buffer created successfully\n");
+
     signal(SIGINT, on_sig);
     signal(SIGTERM, on_sig);
 
     pthread_t http_thr;
-    pthread_create(&http_thr, NULL, http_server, NULL);
+    if (pthread_create(&http_thr, NULL, http_server, NULL) != 0) {
+        fprintf(stderr, "Failed to create HTTP server thread\n");
+        return 1;
+    }
+
+    fprintf(stderr, "HTTP server thread started\n");
 
     // Notify systemd that we're ready
-    sd_notify(0, "READY=1");
+    if (sd_notify(1, "READY=1") < 0) {
+        fprintf(stderr, "Warning: sd_notify failed: %s\n", strerror(errno));
+    } else {
+        fprintf(stderr, "Systemd notification sent successfully\n");
+    }
 
+    fprintf(stderr, "Starting main event loop...\n");
     while (!stop_flag) {
         int err = ring_buffer__poll(g_rb, 100); /* 100ms to be responsive to signals */
-        if (err == -EINTR) break;
+        if (err == -EINTR) {
+            fprintf(stderr, "Ring buffer poll interrupted\n");
+            break;
+        }
+        if (err < 0 && err != -EAGAIN) {
+            fprintf(stderr, "Ring buffer poll error: %d\n", err);
+        }
     }
+    fprintf(stderr, "Main event loop ended\n");
 
     stop_flag = 1;
     pthread_kill(http_thr, SIGINT);

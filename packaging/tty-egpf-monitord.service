@@ -18,6 +18,8 @@ AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_ADMIN
 CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_ADMIN
 LimitMEMLOCK=infinity
 RestartSec=2s
+TimeoutStartSec=120
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
