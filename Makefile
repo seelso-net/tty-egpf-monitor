@@ -65,5 +65,4 @@ install: all
 	install -d $(DESTDIR)/var/log/tty-egpf-monitor
 	install -m 755 build/tty-egpf-monitord $(DESTDIR)/usr/bin/
 	install -m 755 build/tty-egpf-monitor $(DESTDIR)/usr/bin/
-	install -m 755 packaging/tty-egpf-monitord-wrapper.sh $(DESTDIR)/usr/bin/
 	install -m 644 packaging/tty-egpf-monitord.service $(DESTDIR)/usr/lib/systemd/system/

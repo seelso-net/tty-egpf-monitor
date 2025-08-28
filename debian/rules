@@ -9,7 +9,6 @@ override_dh_auto_install:
 	mkdir -p debian/tty-egpf-monitor-cli/usr/bin
 	cp build/tty-egpf-monitord debian/tty-egpf-monitord/usr/bin/tty-egpf-monitord
 	cp build/tty-egpf-monitor debian/tty-egpf-monitor-cli/usr/bin/tty-egpf-monitor
-	cp packaging/tty-egpf-monitord-wrapper.sh debian/tty-egpf-monitord/usr/bin/tty-egpf-monitord-wrapper.sh
 	mkdir -p debian/tty-egpf-monitord/lib/systemd/system
 	cp -a packaging/tty-egpf-monitord.service debian/tty-egpf-monitord/lib/systemd/system/tty-egpf-monitord.service
 	mkdir -p debian/tty-egpf-monitord/DEBIAN

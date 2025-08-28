@@ -6,33 +6,20 @@ on:
       - 'v*'
 
 jobs:
-  build-packages:
+  build-and-release:
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        codename: [ noble ]
-        include:
-          - codename: noble
-            container: ubuntu:24.04
-    container: ${{ matrix.container }}
+    permissions:
+      contents: write
+      pages: write
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Cache apt packages
-      uses: actions/cache@v3
-      with:
-        path: /var/cache/apt/archives
-        key: ${{ runner.os }}-apt-${{ hashFiles('**/Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-apt-
-
     - name: Install build dependencies
       run: |
-        apt-get update
-        apt-get install -y \
+        sudo apt-get update
+        sudo apt-get install -y \
           git \
           clang \
           make \
@@ -60,11 +47,11 @@ jobs:
       run: |
         # For noble, ensure we have libbpf1 and remove any libbpf0
         echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
-        apt-get install -y libbpf1 libbpf-dev
+        sudo apt-get install -y libbpf1 libbpf-dev
         
         # Remove libbpf0 if it exists to ensure we link against libbpf1
-        apt-get remove -y libbpf0 || true
-        apt-get autoremove -y
+        sudo apt-get remove -y libbpf0 || true
+        sudo apt-get autoremove -y
         
         # Verify pkg-config finds the correct libbpf
         echo "Checking pkg-config libbpf configuration:"
@@ -81,32 +68,29 @@ jobs:
 
         echo "bpftool not found, installing..."
         
-        # In containers, uname -r reports host kernel which may not have packages
-        # So we'll try multiple strategies without relying on exact kernel match
-        
         # First, try to find any existing bpftool in linux-tools directories
         BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
         if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
           echo "Found existing bpftool in $BPFDIR"
-          ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+          sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
           bpftool version
           exit 0
         fi
         
         # Try to install any available linux-tools packages
         echo "Trying to install available linux-tools packages..."
-        apt-get update >/dev/null 2>&1
+        sudo apt-get update >/dev/null 2>&1
         
         # Find available linux-tools packages and install them
         AVAILABLE_TOOLS=$(apt-cache search "^linux-tools-[0-9]" | grep -o "linux-tools-[0-9][^ ]*" | head -5)
         for pkg in $AVAILABLE_TOOLS; do
           echo "Trying to install $pkg..."
-          if apt-get install -y "$pkg" >/dev/null 2>&1; then
+          if sudo apt-get install -y "$pkg" >/dev/null 2>&1; then
             echo "Successfully installed $pkg"
             # Check if it provided bpftool
             BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
             if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
-              ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+              sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
               bpftool version
               exit 0
             fi
@@ -118,7 +102,7 @@ jobs:
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
         make -C /tmp/bpftool-src -j$(nproc)
-        install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        sudo install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
         rm -rf /tmp/bpftool-src
         
         echo "Verifying bpftool installation..."
@@ -154,42 +138,6 @@ jobs:
       run: |
         cp ../*.deb .
 
-    - name: Upload Debian package artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: debs-${{ matrix.codename }}
-        path: '*.deb'
-        retention-days: 30
-
-  publish-release:
-    needs: build-packages
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      pages: write
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y apt-utils gnupg
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts/
-
-    - name: Organize packages
-      run: |
-        mkdir -p packages/
-        find artifacts/ -name "*.deb" -exec cp {} packages/ \;
-        ls -la packages/
-        
-        # All packages work on both distributions
-        echo "All packages work on both distributions (libbpf0 | libbpf1)"
-
     - name: Publish apt repo to gh-pages
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -210,9 +158,9 @@ jobs:
           cd -
         }
 
-        # Create single pool directory for both distributions
+        # Create pool directory
         mkdir -p /tmp/apt-repo/pool/main
-        cp packages/*.deb /tmp/apt-repo/pool/main/ 2>/dev/null || true
+        cp *.deb /tmp/apt-repo/pool/main/ 2>/dev/null || true
         
         echo "Packages in pool:"
         ls -la /tmp/apt-repo/pool/main/ 2>/dev/null || echo "No packages"
@@ -223,7 +171,6 @@ jobs:
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
           cd /tmp/apt-repo
           
-          # Use single pool for both distributions
           apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
           apt-ftparchive \
@@ -241,7 +188,7 @@ jobs:
         # Copy index.html for better repository presentation
         cp "$GITHUB_WORKSPACE/index.html" ./index.html || true
         
-        # Publish public key at root for clients (both .asc and .gpg)
+        # Publish public key at root for clients
         KEYASC=""
         if [ -f "$GITHUB_WORKSPACE/public-apt-key.asc" ]; then
           cp "$GITHUB_WORKSPACE/public-apt-key.asc" ./public-apt-key.asc
@@ -277,7 +224,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: 'packages/*.deb'
+        files: '*.deb'
         generate_release_notes: true
         draft: false
         prerelease: false
