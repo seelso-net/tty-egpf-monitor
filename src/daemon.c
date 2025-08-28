@@ -51,6 +51,7 @@ struct sniffer_bpf *g_skel;
 
 static pthread_mutex_t ports_mu = PTHREAD_MUTEX_INITIALIZER;
 static char ports[MAX_PORTS][256];
+static char log_paths[MAX_PORTS][512];
 static FILE *port_logs[MAX_PORTS];
 static uint32_t target_count = 0;
 static char g_socket_path[256] = DEFAULT_SOCKET_PATH;
@@ -119,6 +120,8 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
         snprintf(pathbuf, sizeof(pathbuf), "%s/%s.jsonl", g_log_dir, base);
         use_log = pathbuf;
     }
+    // Store the log path for later reopening
+    snprintf(log_paths[idx], sizeof(log_paths[idx]), "%s", use_log);
     FILE *f = fopen(use_log, "a");
     if (!f) { snprintf(err, errsz, "log open: %s", strerror(errno)); ports[idx][0]='\0'; pthread_mutex_unlock(&ports_mu); return -1; }
     port_logs[idx] = f;
@@ -193,6 +196,18 @@ static void handle_http_client(int cfd)
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
         pthread_mutex_lock(&ports_mu);
         FILE *f = port_logs[idx];
+        if (!f) {
+            // Try to reopen the log file if it was closed (e.g., after daemon restart)
+            const char *devpath = ports[idx];
+            if (devpath[0] != '\0' && log_paths[idx][0] != '\0') {
+                f = fopen(log_paths[idx], "r");
+                if (f) {
+                    // Store the reopened file for reading
+                    // Note: We don't update port_logs[idx] here because that should be for writing
+                    // We just use f for reading the logs
+                }
+            }
+        }
         if (!f) { pthread_mutex_unlock(&ports_mu); http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
         int fd = fileno(f);
         off_t cur = lseek(fd, 0, SEEK_CUR);
@@ -215,6 +230,18 @@ static void handle_http_client(int cfd)
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
         pthread_mutex_lock(&ports_mu);
         FILE *f = port_logs[idx];
+        if (!f) {
+            // Try to reopen the log file if it was closed (e.g., after daemon restart)
+            const char *devpath = ports[idx];
+            if (devpath[0] != '\0' && log_paths[idx][0] != '\0') {
+                f = fopen(log_paths[idx], "r");
+                if (f) {
+                    // Store the reopened file for reading
+                    // Note: We don't update port_logs[idx] here because that should be for writing
+                    // We just use f for reading the logs
+                }
+            }
+        }
         if (!f) { pthread_mutex_unlock(&ports_mu); http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
         int fd = fileno(f);
         off_t cur = lseek(fd, 0, SEEK_END);
