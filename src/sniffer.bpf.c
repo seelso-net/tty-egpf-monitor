@@ -53,9 +53,9 @@ struct { __uint(type, BPF_MAP_TYPE_RINGBUF); __uint(max_entries, 1<<24); } event
 struct fdkey { __u32 tgid; __s32 fd; };
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_interest SEC(".maps");
 
-/* read() entry ctx: capture userspace buffer pointer by (tgid, fd) */
+/* read() entry ctx: capture userspace buffer pointer by tgid */
 struct read_ctx { __s32 fd; const void *buf; size_t count; };
-struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, struct read_ctx); __uint(max_entries, 65536); } rd_ctx SEC(".maps");
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, struct read_ctx); __uint(max_entries, 32768); } rd_ctx SEC(".maps");
 
 /* openat() entry ctx: save filename pointer by tgid */
 struct open_ctx { const char *filename; };
@@ -275,7 +275,7 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
     if (!hit) return 0;
 
     struct read_ctx rc = { .fd = fd, .buf = buf, .count = count };
-    bpf_map_update_elem(&rd_ctx, &k, &rc, BPF_ANY);
+    bpf_map_update_elem(&rd_ctx, &tgid, &rc, BPF_ANY);
     return 0;
 }
 
@@ -291,28 +291,27 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     /* Find the read context we saved on enter */
-    struct fdkey k = { .tgid = tgid, .fd = 0 }; /* fd will be filled from context */
-    struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &k);
+    struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &tgid);
     if (!rc) return 0;
 
     /* Check if this fd is of interest */
-    k.fd = rc->fd;
+    struct fdkey k = { .tgid = tgid, .fd = rc->fd };
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) {
-        bpf_map_delete_elem(&rd_ctx, &k);
+        bpf_map_delete_elem(&rd_ctx, &tgid);
         return 0;
     }
 
     /* Only report successful reads with data */
     if (ret <= 0) {
-        bpf_map_delete_elem(&rd_ctx, &k);
+        bpf_map_delete_elem(&rd_ctx, &tgid);
         return 0;
     }
 
     size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) {
-        bpf_map_delete_elem(&rd_ctx, &k);
+        bpf_map_delete_elem(&rd_ctx, &tgid);
         return 0;
     }
 
@@ -323,7 +322,7 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
     if (cap && rc->buf) bpf_probe_read_user(e->data, cap, rc->buf);
     bpf_ringbuf_submit(e, 0);
 
-    bpf_map_delete_elem(&rd_ctx, &k);
+    bpf_map_delete_elem(&rd_ctx, &tgid);
     return 0;
 }
 
