@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/tty-egpf-monitord-wrapper.sh --socket /run/tty-egpf-monitord.sock --log-dir /var/log/tty-egpf-monitor
+ExecStart=/usr/bin/tty-egpf-monitord --socket /run/tty-egpf-monitord.sock --log-dir /var/log/tty-egpf-monitor
 ExecStartPost=/bin/chmod 0666 /run/tty-egpf-monitord.sock
 Restart=on-failure
 User=root

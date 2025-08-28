@@ -13,6 +13,18 @@ case "$1" in
     if command -v setcap >/dev/null 2>&1; then
       setcap cap_bpf,cap_perfmon,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
     fi
+    # Configure kernel for eBPF access
+    echo 1 > /proc/sys/kernel/unprivileged_bpf_disabled 2>/dev/null || true
+    # Enable necessary tracepoints
+    if [ -d /sys/kernel/debug/tracing ]; then
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_openat/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_exit_openat/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_close/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_exit_close/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_write/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_read/enable 2>/dev/null || true
+      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_ioctl/enable 2>/dev/null || true
+    fi
     # Reload and enable systemd unit if available
     if command -v systemctl >/dev/null 2>&1; then
       systemctl daemon-reload || true
