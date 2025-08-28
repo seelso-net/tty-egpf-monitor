@@ -117,18 +117,7 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
     return 1;
 }
 
-/* Find index after last '/' in a path string contained in map memory */
-static __always_inline int basename_offset(const char *p)
-{
-    int last = 0;
-    /* Use bounded loop to avoid verifier complexity */
-    for (int i = 0; i < 64; i++) {  /* Limit to reasonable path length */
-        char c = ((const volatile char *)p)[i];
-        if (c == '\0') break;
-        if (c == '/') last = i + 1;
-    }
-    return last;
-}
+/* (removed basename_offset function - using exact path matching only) */
 
 /* ---------- sys_enter_openat ---------- */
 SEC("tracepoint/syscalls/sys_enter_openat")
@@ -162,23 +151,20 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
     bpf_map_delete_elem(&op_ctx, &tgid);
     if (glen <= 0) return 0;
 
-    if (ret >= 0) {
-        /* Match path against configured targets and set fd maps */
-        __s32 matched_idx = -1;
+            if (ret >= 0) {
+            /* Match path against configured targets and set fd maps */
+            __s32 matched_idx = -1;
 #pragma unroll
-        for (int i = 0; i < MAX_TARGETS; i++) {
-            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-            if (!sw) break;
-            __u32 ki = i;
-            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-            if (!tpv) continue;
-            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-            if (sw->path[0] == '\0') continue; /* unused slot */
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-            int bo_w = basename_offset(sw->path);
-            int bo_g = basename_offset(sg->path);
-            if (str_eq_n(sw->path + bo_w, sg->path + bo_g, COMPARE_MAX)) { matched_idx = i; break; }
-        }
+            for (int i = 0; i < MAX_TARGETS; i++) {
+                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+                if (!sw) break;
+                __u32 ki = i;
+                struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+                if (!tpv) continue;
+                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+                if (sw->path[0] == '\0') continue; /* unused slot */
+                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            }
 
         if (matched_idx >= 0) {
             struct fdkey k = { .tgid = tgid, .fd = (__s32)ret };
