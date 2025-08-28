@@ -31,6 +31,14 @@ char LICENSE[] SEC("license") = "GPL";
 /* Maximum number of concurrently monitored target paths */
 #define MAX_TARGETS 16
 
+/* Minimal stat mode bits for character device check */
+#ifndef S_IFMT
+#define S_IFMT  00170000
+#endif
+#ifndef S_IFCHR
+#define S_IFCHR 0020000
+#endif
+
 enum evtype { EV_OPEN=1, EV_CLOSE=2, EV_READ=3, EV_WRITE=4, EV_IOCTL=5 };
 
 struct event {
@@ -82,6 +90,8 @@ struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u
 /* Map fd -> target index for quick attribution */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u32); __uint(max_entries, 65536); } fd_portidx SEC(".maps");
 
+/* (removed device-id maps; using path matching only) */
+
 static __always_inline void fill_common(struct event *e, __u32 type) {
     __u64 id = bpf_get_current_pid_tgid();
     e->ts = bpf_ktime_get_ns();
@@ -105,6 +115,19 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
         if (!ca) return 1;
     }
     return 1;
+}
+
+/* Find index after last '/' in a path string contained in map memory */
+static __always_inline int basename_offset(const char *p)
+{
+    int last = 0;
+#pragma unroll
+    for (int i = 0; i < MAX_PATH; i++) {
+        char c = ((const volatile char *)p)[i];
+        if (c == '\0') break;
+        if (c == '/') last = i + 1;
+    }
+    return last;
 }
 
 /* ---------- sys_enter_openat ---------- */
@@ -140,17 +163,10 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
     if (glen <= 0) return 0;
 
     if (ret >= 0) {
-        /* Try to match against configured targets */
-        __u32 *cntp = bpf_map_lookup_elem(&target_count, &k0);
-        __u32 cnt = cntp ? *cntp : MAX_TARGETS;
-        if (cnt > MAX_TARGETS) cnt = MAX_TARGETS;
-
+        /* Match path against configured targets and set fd maps */
         __s32 matched_idx = -1;
-
 #pragma unroll
         for (int i = 0; i < MAX_TARGETS; i++) {
-            if ((__u32)i >= cnt) break;
-            /* scratch1 := wanted path i (copy from kernel memory) */
             struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
             if (!sw) break;
             __u32 ki = i;
@@ -158,10 +174,10 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             if (!tpv) continue;
             bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
             if (sw->path[0] == '\0') continue; /* unused slot */
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) {
-                matched_idx = i;
-                break;
-            }
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            int bo_w = basename_offset(sw->path);
+            int bo_g = basename_offset(sg->path);
+            if (str_eq_n(sw->path + bo_w, sg->path + bo_g, COMPARE_MAX)) { matched_idx = i; break; }
         }
 
         if (matched_idx >= 0) {
@@ -170,16 +186,19 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             __u32 midx = (unsigned)matched_idx;
             bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
             bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-
-            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-            if (!e) return 0;
-            fill_common(e, EV_OPEN);
-            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = midx; e->data_len = 0; e->data_trunc = 0;
-            bpf_ringbuf_submit(e, 0);
         }
+
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) return 0;
+        fill_common(e, EV_OPEN);
+        e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = matched_idx >= 0 ? (unsigned)matched_idx : 0;
+        e->data_len = 0; e->data_trunc = 0;
+        bpf_ringbuf_submit(e, 0);
     }
     return 0;
 }
+
+/* LSM hook removed in favor of userspace mapping */
 
 /* ---------- sys_enter_close ---------- */
 SEC("tracepoint/syscalls/sys_enter_close")

@@ -85,8 +85,8 @@ static int handle_event(void *ctx, void *data, size_t len)
     (void)ctx;
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
-    
 
+    /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
     log_event_json(e);
@@ -100,6 +100,7 @@ static int sync_targets_map(void)
     if (tp_fd < 0) return -1;
     for (uint32_t i=0;i<MAX_PORTS;i++) {
         if (bpf_map_update_elem(tp_fd, &i, ports[i], BPF_ANY)) return -1;
+        /* (removed device-id map updates) */
     }
     int tc_fd = bpf_map__fd(g_skel->maps.target_count);
     if (tc_fd >= 0) {
