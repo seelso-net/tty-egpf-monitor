@@ -126,7 +126,8 @@ int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
     const char *filename;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    struct open_ctx oc = { .filename = filename };
+    struct open_ctx oc;
+    oc.filename = filename;
     bpf_map_update_elem(&op_ctx, &tgid, &oc, BPF_ANY);
     return 0;
 }
@@ -167,7 +168,9 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
             }
 
         if (matched_idx >= 0) {
-            struct fdkey k = { .tgid = tgid, .fd = (__s32)ret };
+            struct fdkey k;
+    k.tgid = tgid;
+    k.fd = (__s32)ret;
             __u8 one = 1;
             __u32 midx = (unsigned)matched_idx;
             bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
@@ -194,11 +197,14 @@ int tp_enter_close(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
-    struct fdkey k = { .tgid = tgid, .fd = fd };
+    struct fdkey k;
+    k.tgid = tgid;
+    k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
-    struct close_ctx cc = { .fd = fd };
+    struct close_ctx cc;
+    cc.fd = fd;
     bpf_map_update_elem(&cl_ctx, &tgid, &cc, BPF_ANY);
     return 0;
 }
@@ -214,7 +220,9 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
     struct close_ctx *cc = bpf_map_lookup_elem(&cl_ctx, &tgid);
     if (!cc) return 0;
 
-    struct fdkey k = { .tgid = tgid, .fd = cc->fd };
+    struct fdkey k;
+    k.tgid = tgid;
+    k.fd = cc->fd;
     bpf_map_delete_elem(&cl_ctx, &tgid);
 
     if (ret == 0) {
@@ -246,7 +254,9 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
-    struct fdkey k = { .tgid = tgid, .fd = fd };
+    struct fdkey k;
+    k.tgid = tgid;
+    k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
@@ -276,7 +286,11 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     /* Always store read context, check interest in exit */
-    struct read_ctx rc = { .fd = fd, .buf = buf, .count = count };
+    /* Use individual field assignment to avoid stack access issues */
+    struct read_ctx rc;
+    rc.fd = fd;
+    rc.buf = buf;
+    rc.count = count;
     bpf_map_update_elem(&rd_ctx, &tgid, &rc, BPF_ANY);
     return 0;
 }
@@ -297,7 +311,9 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
     if (!rc) return 0;
 
     /* Check if this fd is of interest */
-    struct fdkey k = { .tgid = tgid, .fd = rc->fd };
+    struct fdkey k;
+    k.tgid = tgid;
+    k.fd = rc->fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) {
         bpf_map_delete_elem(&rd_ctx, &tgid);
@@ -338,7 +354,9 @@ int tp_enter_ioctl(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&cmd, sizeof(cmd), &ctx->args[1]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
-    struct fdkey k = { .tgid = tgid, .fd = fd };
+    struct fdkey k;
+    k.tgid = tgid;
+    k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
