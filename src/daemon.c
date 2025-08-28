@@ -345,13 +345,25 @@ static void *http_server(void *arg)
 {
     // Serve HTTP over Unix Domain Socket
     (void)arg;
+    fprintf(stderr, "HTTP server thread starting, socket path: %s\n", g_socket_path);
+    
     int s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s < 0) { fprintf(stderr, "socket: %s\n", strerror(errno)); return NULL; }
+    if (s < 0) { 
+        fprintf(stderr, "socket: %s\n", strerror(errno)); 
+        return NULL; 
+    }
+    
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
+    if (strlen(g_socket_path) >= sizeof(addr.sun_path)) {
+        fprintf(stderr, "Socket path too long: %s\n", g_socket_path);
+        close(s);
+        return NULL;
+    }
     snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", g_socket_path);
     unlink(g_socket_path);
+    
     if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         fprintf(stderr, "bind(%s): %s\n", g_socket_path, strerror(errno));
         close(s);
@@ -473,11 +485,12 @@ int main(int argc, char **argv)
 
     pthread_t http_thr;
     if (pthread_create(&http_thr, NULL, http_server, NULL) != 0) {
-        fprintf(stderr, "Failed to create HTTP server thread\n");
+        fprintf(stderr, "Failed to create HTTP server thread: %s\n", strerror(errno));
         return 1;
     }
 
     fprintf(stderr, "HTTP server thread started\n");
+    fprintf(stderr, "Socket path: %s\n", g_socket_path);
 
     // Notify systemd that we're ready
     if (sd_notify(1, "READY=1") < 0) {
@@ -487,14 +500,27 @@ int main(int argc, char **argv)
     }
 
     fprintf(stderr, "Starting main event loop...\n");
+    int loop_count = 0;
     while (!stop_flag) {
         int err = ring_buffer__poll(g_rb, 100); /* 100ms to be responsive to signals */
         if (err == -EINTR) {
             fprintf(stderr, "Ring buffer poll interrupted\n");
             break;
         }
-        if (err < 0 && err != -EAGAIN) {
-            fprintf(stderr, "Ring buffer poll error: %d\n", err);
+        if (err == -EAGAIN) {
+            /* No events available, this is normal */
+            loop_count++;
+            if (loop_count % 100 == 0) { /* Print every 10 seconds */
+                fprintf(stderr, "Daemon alive, waiting for events... (loop %d)\n", loop_count);
+            }
+            continue;
+        }
+        if (err < 0) {
+            fprintf(stderr, "Ring buffer poll error: %d (%s)\n", err, strerror(-err));
+            break;
+        }
+        if (err > 0) {
+            fprintf(stderr, "Processed %d events\n", err);
         }
     }
     fprintf(stderr, "Main event loop ended\n");
