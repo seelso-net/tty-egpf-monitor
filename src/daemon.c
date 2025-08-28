@@ -85,6 +85,9 @@ static int handle_event(void *ctx, void *data, size_t len)
     (void)ctx;
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
+    
+
+    
     pthread_mutex_lock(&ports_mu);
     log_event_json(e);
     pthread_mutex_unlock(&ports_mu);
@@ -407,6 +410,14 @@ int main(int argc, char **argv)
     g_skel = sniffer_bpf__open();
     if (!g_skel) { fprintf(stderr, "open skel failed\n"); return 1; }
     if (sniffer_bpf__load(g_skel)) { fprintf(stderr, "load skel failed (need BTF)\n"); return 1; }
+    
+    // Ensure exit read tracepoint is enabled for RX capture
+    int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
+    if (fd >= 0) {
+        write(fd, "1", 1);
+        close(fd);
+    }
+    
     if (sniffer_bpf__attach(g_skel)) { fprintf(stderr, "attach failed\n"); return 1; }
 
     g_rb = ring_buffer__new(bpf_map__fd(g_skel->maps.events), handle_event, NULL, NULL);

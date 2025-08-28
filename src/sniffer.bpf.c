@@ -270,10 +270,7 @@ int tp_enter_read(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
-    struct fdkey k = { .tgid = tgid, .fd = fd };
-    __u8 *hit = bpf_map_lookup_elem(&fd_interest, &k);
-    if (!hit) return 0;
-
+    /* Always store read context, check interest in exit */
     struct read_ctx rc = { .fd = fd, .buf = buf, .count = count };
     bpf_map_update_elem(&rd_ctx, &tgid, &rc, BPF_ANY);
     return 0;
