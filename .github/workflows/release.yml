@@ -136,15 +136,19 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy Debian packages to workspace
+    - name: Copy and rename Debian packages
       run: |
-        cp ../*.deb .
+        mkdir -p noble-packages
+        for f in ../*.deb; do
+          base=$(basename "$f" .deb)
+          cp "$f" "noble-packages/${base}~noble.deb"
+        done
 
     - name: Upload noble packages
       uses: actions/upload-artifact@v4
       with:
         name: noble-packages
-        path: '*.deb'
+        path: noble-packages/*.deb
 
   # Build for Ubuntu 22.04 (jammy) - new job
   build-jammy:
@@ -277,15 +281,19 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy Debian packages to workspace
+    - name: Copy and rename Debian packages
       run: |
-        cp ../*.deb .
+        mkdir -p jammy-packages
+        for f in ../*.deb; do
+          base=$(basename "$f" .deb)
+          cp "$f" "jammy-packages/${base}~jammy.deb"
+        done
 
     - name: Upload jammy packages
       uses: actions/upload-artifact@v4
       with:
         name: jammy-packages
-        path: '*.deb'
+        path: jammy-packages/*.deb
 
   # Publish apt repository - modified to handle both packages
   publish-apt-repo:
@@ -329,8 +337,8 @@ jobs:
         mkdir -p /tmp/apt-repo/pool/jammy
         
         # Copy packages to their respective pools
-        cp packages/noble-packages/*.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
-        cp packages/jammy-packages/*.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
+        cp packages/noble-packages/*~noble.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
+        cp packages/jammy-packages/*~jammy.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
         
         echo "Packages in noble pool:"
         ls -la /tmp/apt-repo/pool/noble/ 2>/dev/null || echo "No noble packages"
@@ -398,7 +406,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: 'packages/*/*.deb'
+        files: 'packages/*/*~*.deb'
         generate_release_notes: true
         draft: false
         prerelease: false
