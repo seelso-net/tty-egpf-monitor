@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-24.04
+    container: ubuntu:24.04
     permissions:
       contents: write
       pages: write
@@ -18,8 +19,8 @@ jobs:
 
     - name: Install build dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        apt-get update
+        apt-get install -y \
           git \
           clang \
           make \
@@ -47,11 +48,11 @@ jobs:
       run: |
         # For noble, ensure we have libbpf1 and remove any libbpf0
         echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
-        sudo apt-get install -y libbpf1 libbpf-dev
+        apt-get install -y libbpf1 libbpf-dev
         
         # Remove libbpf0 if it exists to ensure we link against libbpf1
-        sudo apt-get remove -y libbpf0 || true
-        sudo apt-get autoremove -y
+        apt-get remove -y libbpf0 || true
+        apt-get autoremove -y
         
         # Verify pkg-config finds the correct libbpf
         echo "Checking pkg-config libbpf configuration:"
@@ -72,25 +73,25 @@ jobs:
         BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
         if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
           echo "Found existing bpftool in $BPFDIR"
-          sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+          ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
           bpftool version
           exit 0
         fi
         
         # Try to install any available linux-tools packages
         echo "Trying to install available linux-tools packages..."
-        sudo apt-get update >/dev/null 2>&1
+        apt-get update >/dev/null 2>&1
         
         # Find available linux-tools packages and install them
         AVAILABLE_TOOLS=$(apt-cache search "^linux-tools-[0-9]" | grep -o "linux-tools-[0-9][^ ]*" | head -5)
         for pkg in $AVAILABLE_TOOLS; do
           echo "Trying to install $pkg..."
-          if sudo apt-get install -y "$pkg" >/dev/null 2>&1; then
+          if apt-get install -y "$pkg" >/dev/null 2>&1; then
             echo "Successfully installed $pkg"
             # Check if it provided bpftool
             BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
             if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
-              sudo ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+              ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
               bpftool version
               exit 0
             fi
@@ -102,7 +103,7 @@ jobs:
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
         make -C /tmp/bpftool-src -j$(nproc)
-        sudo install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
         rm -rf /tmp/bpftool-src
         
         echo "Verifying bpftool installation..."
