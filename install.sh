@@ -5,7 +5,7 @@
 
 set -e
 
-VERSION=${1:-latest}
+PACKAGE_VERSION=${1:-latest}
 REPO="seelso-net/tty-egpf-monitor"
 PACKAGE_NAME="tty-egpf-monitor"
 APT_METHOD=${APT_METHOD:-true}  # Default to APT method, set to false to use direct download
@@ -63,16 +63,16 @@ install_via_download() {
     cd "$TEMP_DIR"
     
     # Download the latest release
-    if [ "$VERSION" = "latest" ]; then
+    if [ "$PACKAGE_VERSION" = "latest" ]; then
         echo "📥 Downloading latest release..."
-        RELEASE_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*deb" | cut -d '"' -f 4)
+        RELEASE_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*monitord.*deb" | cut -d '"' -f 4)
     else
-        echo "📥 Downloading version $VERSION..."
-        RELEASE_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/v$VERSION" | grep "browser_download_url.*deb" | cut -d '"' -f 4)
+        echo "📥 Downloading version $PACKAGE_VERSION..."
+        RELEASE_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/v$PACKAGE_VERSION" | grep "browser_download_url.*monitord.*deb" | cut -d '"' -f 4)
     fi
     
     if [ -z "$RELEASE_URL" ]; then
-        echo "❌ Error: Could not find Debian package for version $VERSION"
+        echo "❌ Error: Could not find Debian package for version $PACKAGE_VERSION"
         exit 1
     fi
     
