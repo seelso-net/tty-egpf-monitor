@@ -1,4 +1,4 @@
-tty-egpf-monitor (1.1.0-1) unstable; urgency=medium
+tty-egpf-monitor (0.3.0-1) unstable; urgency=medium
 
   * Add Ubuntu 22.04 (Jammy) compatibility
   * Fix exit status 127 on systems without CAP_BPF capability
