@@ -203,8 +203,7 @@ static void handle_http_client(int cfd)
                 f = fopen(log_paths[idx], "r");
                 if (f) {
                     // Store the reopened file for reading
-                    // Note: We don't update port_logs[idx] here because that should be for writing
-                    // We just use f for reading the logs
+                    port_logs[idx] = f;
                 }
             }
         }
@@ -237,8 +236,7 @@ static void handle_http_client(int cfd)
                 f = fopen(log_paths[idx], "r");
                 if (f) {
                     // Store the reopened file for reading
-                    // Note: We don't update port_logs[idx] here because that should be for writing
-                    // We just use f for reading the logs
+                    port_logs[idx] = f;
                 }
             }
         }
