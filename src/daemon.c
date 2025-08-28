@@ -19,11 +19,16 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <ctype.h>
 #include <systemd/sd-daemon.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "sniffer.skel.h"
+
+/* fdkey struct to match BPF definition */
+struct fdkey { uint32_t tgid; int32_t fd; };
 
 #define MAX_PORTS 16
 #define MAX_PATH 256
@@ -63,6 +68,7 @@ static char g_log_dir[256] = DEFAULT_LOG_DIR;
 // Forward declarations
 static void save_config(void);
 static void load_config(void);
+static void scan_existing_fds(const char *devpath, uint32_t port_idx);
 
 static void log_event_json(const struct event *e)
 {
@@ -147,6 +153,9 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     
     // Save configuration after adding port
     save_config();
+    
+    // Scan existing processes for already-open fds to this device
+    scan_existing_fds(devpath, idx);
     
     return (int)idx;
 }
@@ -249,6 +258,66 @@ static void reopen_existing_logs(void)
         }
     }
     pthread_mutex_unlock(&ports_mu);
+    
+    // Also scan for already-open fds
+    for (uint32_t i = 0; i < target_count; i++) {
+        if (ports[i][0] != '\0') {
+            scan_existing_fds(ports[i], i);
+        }
+    }
+}
+
+static void scan_existing_fds(const char *devpath, uint32_t port_idx)
+{
+    DIR *proc_dir = opendir("/proc");
+    if (!proc_dir) return;
+    
+    struct dirent *pid_entry;
+    char fd_path[512], link_path[512];
+    
+    while ((pid_entry = readdir(proc_dir))) {
+        // Skip non-numeric entries (not PIDs)
+        if (!isdigit(pid_entry->d_name[0])) continue;
+        
+        uint32_t tgid = atoi(pid_entry->d_name);
+        snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", pid_entry->d_name);
+        
+        DIR *fd_dir = opendir(fd_path);
+        if (!fd_dir) continue;
+        
+        struct dirent *fd_entry;
+        while ((fd_entry = readdir(fd_dir))) {
+            if (!isdigit(fd_entry->d_name[0])) continue;
+            
+            snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
+            char target[256];
+            ssize_t len = readlink(link_path, target, sizeof(target) - 1);
+            if (len > 0) {
+                target[len] = '\0';
+                if (strcmp(target, devpath) == 0) {
+                    // Found a match! Update BPF maps
+                    int fd = atoi(fd_entry->d_name);
+                    struct fdkey k = { .tgid = tgid, .fd = fd };
+                    uint8_t one = 1;
+                    
+                    int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
+                    int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
+                    
+                    if (fd_interest_fd >= 0) {
+                        bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
+                    }
+                    if (fd_portidx_fd >= 0) {
+                        bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
+                    }
+                    
+                    fprintf(stderr, "DEBUG: Found existing fd %d in process %u for %s\n", 
+                            fd, tgid, devpath);
+                }
+            }
+        }
+        closedir(fd_dir);
+    }
+    closedir(proc_dir);
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)

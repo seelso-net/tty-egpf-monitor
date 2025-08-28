@@ -177,9 +177,9 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
     bpf_map_delete_elem(&op_ctx, &tgid);
     if (glen <= 0) return 0;
 
-            if (ret >= 0) {
-            /* Match path against configured targets and set fd maps */
-            __s32 matched_idx = -1;
+    if (ret >= 0) {
+        /* Match path against configured targets and set fd maps */
+        __s32 matched_idx = -1;
 #pragma unroll
             for (int i = 0; i < MAX_TARGETS; i++) {
                 struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
@@ -232,7 +232,7 @@ int tp_exit_openat2(struct trace_event_raw_sys_exit *ctx)
     if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
     int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
     bpf_map_delete_elem(&op_ctx, &tgid);
-    if (glen <= 0) return 0;
+        if (glen <= 0) return 0;
 
     if (ret >= 0) {
         /* Match path against configured targets and set fd maps */
