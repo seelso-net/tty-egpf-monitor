@@ -408,9 +408,37 @@ int main(int argc, char **argv)
     }
 
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
+    
+    // Add diagnostic information
+    fprintf(stderr, "libbpf version: %s\n", libbpf_version_string());
+    fprintf(stderr, "Kernel version: ");
+    FILE *kver = fopen("/proc/version", "r");
+    if (kver) {
+        char buf[256];
+        if (fgets(buf, sizeof(buf), kver)) {
+            fprintf(stderr, "%s", buf);
+        }
+        fclose(kver);
+    }
+    
+    // Check BTF availability
+    if (access("/sys/kernel/btf/vmlinux", R_OK) == 0) {
+        fprintf(stderr, "BTF available: /sys/kernel/btf/vmlinux\n");
+    } else {
+        fprintf(stderr, "BTF not available: %s\n", strerror(errno));
+    }
+    
     g_skel = sniffer_bpf__open();
-    if (!g_skel) { fprintf(stderr, "open skel failed\n"); return 1; }
-    if (sniffer_bpf__load(g_skel)) { fprintf(stderr, "load skel failed (need BTF)\n"); return 1; }
+    if (!g_skel) { 
+        fprintf(stderr, "open skel failed: %s\n", strerror(errno));
+        return 1; 
+    }
+    
+    int load_err = sniffer_bpf__load(g_skel);
+    if (load_err) { 
+        fprintf(stderr, "load skel failed (err=%d): %s\n", load_err, strerror(-load_err));
+        return 1; 
+    }
     
     // Ensure exit read tracepoint is enabled for RX capture
     int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
@@ -419,7 +447,11 @@ int main(int argc, char **argv)
         close(fd);
     }
     
-    if (sniffer_bpf__attach(g_skel)) { fprintf(stderr, "attach failed\n"); return 1; }
+    int attach_err = sniffer_bpf__attach(g_skel);
+    if (attach_err) { 
+        fprintf(stderr, "attach failed (err=%d): %s\n", attach_err, strerror(-attach_err));
+        return 1; 
+    }
 
     g_rb = ring_buffer__new(bpf_map__fd(g_skel->maps.events), handle_event, NULL, NULL);
     if (!g_rb) { fprintf(stderr, "ring_buffer__new failed\n"); return 1; }
