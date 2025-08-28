@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <systemd/sd-daemon.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -390,6 +391,9 @@ int main(int argc, char **argv)
 
     pthread_t http_thr;
     pthread_create(&http_thr, NULL, http_server, NULL);
+
+    // Notify systemd that we're ready
+    sd_notify(0, "READY=1");
 
     while (!stop_flag) {
         int err = ring_buffer__poll(g_rb, 100); /* 100ms to be responsive to signals */
