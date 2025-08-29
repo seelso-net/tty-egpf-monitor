@@ -13,27 +13,27 @@ case "$1" in
             LIBBPF_VERSION=$(pkg-config --modversion libbpf 2>/dev/null || echo "unknown")
             echo "Current libbpf version: $LIBBPF_VERSION"
             
-            # Check if we need to build libbpf 1.7.0
-            NEED_LIBBPF_17=false
+            # Check if we need to build libbpf 1.6.2
+            NEED_LIBBPF_162=false
             
             if [ "$LIBBPF_VERSION" = "unknown" ]; then
-                echo "No libbpf found via pkg-config, will build 1.7.0"
-                NEED_LIBBPF_17=true
+                echo "No libbpf found via pkg-config, will build 1.6.2"
+                NEED_LIBBPF_162=true
             else
-                # Parse version and check if it's >= 1.7.0
+                # Parse version and check if it's >= 1.6.2
                 MAJOR=$(echo "$LIBBPF_VERSION" | cut -d. -f1)
                 MINOR=$(echo "$LIBBPF_VERSION" | cut -d. -f2)
                 
-                if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 7 ]); then
-                    echo "libbpf version $LIBBPF_VERSION is too old, need 1.7.0 or newer"
-                    NEED_LIBBPF_17=true
+                if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 6 ]); then
+                    echo "libbpf version $LIBBPF_VERSION is too old, need 1.6.2 or newer"
+                    NEED_LIBBPF_162=true
                 else
                     echo "libbpf version $LIBBPF_VERSION is compatible"
                 fi
             fi
             
-            if [ "$NEED_LIBBPF_17" = "true" ]; then
-                echo "Building libbpf 1.7.0..."
+            if [ "$NEED_LIBBPF_162" = "true" ]; then
+                echo "Building libbpf 1.6.2..."
                 
                 # Install build dependencies
                 apt-get update
@@ -44,9 +44,9 @@ case "$1" in
                     zlib1g-dev \
                     pkg-config
                 
-                # Build and install libbpf 1.7.0
+                # Build and install libbpf 1.6.2
                 cd /tmp
-                git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
+                git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
                 cd libbpf/src
                 make && make install
                 ldconfig
@@ -55,7 +55,7 @@ case "$1" in
                 cd /
                 rm -rf /tmp/libbpf
                 
-                echo "libbpf 1.7.0 installed successfully"
+                echo "libbpf 1.6.2 installed successfully"
             fi
         else
             echo "pkg-config not available, assuming libbpf is compatible"

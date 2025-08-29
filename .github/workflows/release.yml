@@ -62,21 +62,21 @@ jobs:
 
     - name: Install correct libbpf version
       run: |
-        # For noble, build and install libbpf 1.7.0 to ensure compatibility
-        echo "Ubuntu 24.04 (noble) detected, building libbpf 1.7.0"
+        # For noble, build and install libbpf 1.6.2 to ensure compatibility
+        echo "Ubuntu 24.04 (noble) detected, building libbpf 1.6.2"
         
         # Install build dependencies for libbpf
         apt-get install -y libelf-dev zlib1g-dev
         
-        # Build and install libbpf 1.7.0
+        # Build and install libbpf 1.6.2
         cd /tmp
-        git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
+        git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
         cd libbpf/src
         make && make install
         ldconfig
         
-        # Verify libbpf 1.7.0 is installed
-        echo "Verifying libbpf 1.7.0 installation:"
+        # Verify libbpf 1.6.2 is installed
+        echo "Verifying libbpf 1.6.2 installation:"
         if [ -f /usr/local/lib/libbpf.so.1 ]; then
           echo "libbpf.so.1 found in /usr/local/lib"
           ls -la /usr/local/lib/libbpf.so*
@@ -97,13 +97,13 @@ jobs:
             
             printf("libbpf version: %u.%u (%s)\n", major, minor, version_str);
             
-            // Verify we have libbpf 1.7.0
-            if (major != 1 || minor < 7) {
-                printf("ERROR: Expected libbpf 1.7.0, got %u.%u\n", major, minor);
+            // Verify we have libbpf 1.6.2
+            if (major != 1 || minor < 6) {
+                printf("ERROR: Expected libbpf 1.6.2, got %u.%u\n", major, minor);
                 return 1;
             }
             
-            printf("libbpf version check: PASSED (1.7.0)\n");
+            printf("libbpf version check: PASSED (1.6.2)\n");
             return 0;
         }
         EOF
@@ -277,15 +277,15 @@ jobs:
 
     - name: Install compatible libbpf version
       run: |
-        # For jammy, build and install libbpf 1.7.0 to ensure compatibility
-        echo "Ubuntu 22.04 (jammy) detected, building libbpf 1.7.0"
+        # For jammy, build and install libbpf 1.6.2 to ensure compatibility
+        echo "Ubuntu 22.04 (jammy) detected, building libbpf 1.6.2"
         
         # Install build dependencies for libbpf
         apt-get install -y libelf-dev zlib1g-dev
         
-        # Build and install libbpf 1.7.0
+        # Build and install libbpf 1.6.2
         cd /tmp
-        git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
+        git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
         cd libbpf/src
         make && make install
         ldconfig
