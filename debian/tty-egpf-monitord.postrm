@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  purge|remove)
+    # Remove all service file variants
+    rm -f /lib/systemd/system/tty-egpf-monitord.service.jammy
+    rm -f /lib/systemd/system/tty-egpf-monitord.service.noble
+    rm -f /lib/systemd/system/tty-egpf-monitord.service.default
+  ;;
+esac
+
+#DEBHELPER#

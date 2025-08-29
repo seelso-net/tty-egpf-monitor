@@ -16,7 +16,7 @@ ProtectHome=no
 ReadWritePaths=/var/log/tty-egpf-monitor /run /sys/kernel/debug
 # Ubuntu 22.04 doesn't support CAP_BPF (kernel < 5.8), use CAP_SYS_ADMIN only
 AmbientCapabilities=CAP_SYS_ADMIN CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_PERFMON
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN
 LimitMEMLOCK=infinity
 RestartSec=2s
 

@@ -9,6 +9,21 @@ case "$1" in
     install -d -m 0755 /run
     # Create log directory
     install -d -m 0755 /var/log/tty-egpf-monitor
+    
+    # Select appropriate systemd service file based on target OS
+    if [ -f /etc/os-release ]; then
+      . /etc/os-release
+      if [ "$VERSION_ID" = "22.04" ] && [ -f /lib/systemd/system/tty-egpf-monitord.service.jammy ]; then
+        echo "Installing Ubuntu 22.04 compatible service file..."
+        cp -f /lib/systemd/system/tty-egpf-monitord.service.jammy /lib/systemd/system/tty-egpf-monitord.service
+      elif [ "$VERSION_ID" = "24.04" ] && [ -f /lib/systemd/system/tty-egpf-monitord.service.noble ]; then
+        echo "Installing Ubuntu 24.04 compatible service file..."
+        cp -f /lib/systemd/system/tty-egpf-monitord.service.noble /lib/systemd/system/tty-egpf-monitord.service
+      elif [ -f /lib/systemd/system/tty-egpf-monitord.service.default ]; then
+        echo "Installing default service file..."
+        cp -f /lib/systemd/system/tty-egpf-monitord.service.default /lib/systemd/system/tty-egpf-monitord.service
+      fi
+    fi
     # Set capabilities for eBPF access based on Ubuntu version
     if command -v setcap >/dev/null 2>&1; then
       # Check Ubuntu version
