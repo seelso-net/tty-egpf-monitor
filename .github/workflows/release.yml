@@ -452,6 +452,7 @@ jobs:
       with:
         path: packages
         pattern: "*-${{ github.ref_name }}"
+        merge-multiple: true
 
     - name: Install apt-utils
       run: |
@@ -467,8 +468,8 @@ jobs:
         find packages/ -type d 2>/dev/null || echo "No subdirectories found"
         echo "DEBUG: All .deb files:"
         find packages/ -name "*.deb" 2>/dev/null || echo "No .deb files found"
-        echo "DEBUG: Pattern search for v0.4.8:"
-        find packages/ -name "*v0.4.8*" 2>/dev/null || echo "No v0.4.8 artifacts found"
+        echo "DEBUG: Pattern search for ${{ github.ref_name }}:"
+        find packages/ -name "*${{ github.ref_name }}*" 2>/dev/null || echo "No artifacts matching ref_name found"
 
     - name: Publish apt repo to gh-pages
       env:
@@ -496,10 +497,18 @@ jobs:
         # Create separate pool directories for each distribution
         mkdir -p /tmp/apt-repo/pool/noble
         mkdir -p /tmp/apt-repo/pool/jammy
+        # Clean previous packages to avoid stale versions
+        rm -f /tmp/apt-repo/pool/noble/*.deb || true
+        rm -f /tmp/apt-repo/pool/jammy/*.deb || true
         
-        # Copy packages to their respective pools
-        cp packages/noble-packages-${{ github.ref_name }}/*~noble.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
-        cp packages/jammy-packages-${{ github.ref_name }}/*~jammy.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
+        # Copy packages to their respective pools (fail if none found)
+        N_FOUND=0
+        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/noble/; N_FOUND=$((N_FOUND+1)); done < <(find packages -type f -name "*~noble.deb" 2>/dev/null)
+        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/jammy/; N_FOUND=$((N_FOUND+1)); done < <(find packages -type f -name "*~jammy.deb" 2>/dev/null)
+        if [ "$N_FOUND" -eq 0 ]; then
+          echo "ERROR: No .deb packages were found in downloaded artifacts for $GITHUB_REF" >&2
+          exit 1
+        fi
         
         echo "Packages in noble pool:"
         ls -la /tmp/apt-repo/pool/noble/ 2>/dev/null || echo "No noble packages"
@@ -571,7 +580,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: 'packages/*/*~*.deb'
+        files: 'packages/**/*.deb'
         generate_release_notes: true
         draft: false
         prerelease: false
