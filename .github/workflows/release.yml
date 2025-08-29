@@ -169,11 +169,21 @@ jobs:
       with:
         name: noble-packages-${{ github.ref_name }}
         path: noble-packages/*.deb
+        
+    - name: List all built packages (always)
+      if: always()
+      run: |
+        echo "=== Listing all .deb files found ==="
+        find . -name "*.deb" -type f 2>/dev/null || echo "No .deb files found"
 
     - name: Debug - Check if packages were built
+      if: always()
       run: |
         echo "DEBUG: Checking if packages were built..."
         echo "DEBUG: Current directory: $(pwd)"
+        echo "DEBUG: is_tag output = ${{ steps.check_tag.outputs.is_tag }}"
+        echo "DEBUG: GITHUB_REF = ${{ github.ref }}"
+        echo "DEBUG: GITHUB_REF_NAME = ${{ github.ref_name }}"
         echo "DEBUG: Noble packages directory:"
         ls -la noble-packages/ 2>/dev/null || echo "No noble-packages directory"
         echo "DEBUG: Parent directory .deb files:"
@@ -424,11 +434,21 @@ jobs:
       with:
         name: jammy-packages-${{ github.ref_name }}
         path: jammy-packages/*.deb
+        
+    - name: List all built packages (always)
+      if: always()
+      run: |
+        echo "=== Listing all .deb files found ==="
+        find . -name "*.deb" -type f 2>/dev/null || echo "No .deb files found"
 
     - name: Debug - Check if packages were built
+      if: always()
       run: |
         echo "DEBUG: Checking if packages were built..."
         echo "DEBUG: Current directory: $(pwd)"
+        echo "DEBUG: is_tag output = ${{ steps.check_tag.outputs.is_tag }}"
+        echo "DEBUG: GITHUB_REF = ${{ github.ref }}"
+        echo "DEBUG: GITHUB_REF_NAME = ${{ github.ref_name }}"
         echo "DEBUG: Jammy packages directory:"
         ls -la jammy-packages/ 2>/dev/null || echo "No jammy-packages directory"
         echo "DEBUG: Parent directory .deb files:"
@@ -449,15 +469,24 @@ jobs:
 
     - name: Download noble packages artifact
       uses: actions/download-artifact@v4
+      continue-on-error: true
       with:
         name: noble-packages-${{ github.ref_name }}
         path: packages/noble
 
     - name: Download jammy packages artifact
       uses: actions/download-artifact@v4
+      continue-on-error: true
       with:
         name: jammy-packages-${{ github.ref_name }}
         path: packages/jammy
+        
+    - name: List all artifacts (debug)
+      run: |
+        echo "=== Checking what artifacts we have ==="
+        echo "Current directory: $(pwd)"
+        echo "Package directory structure:"
+        find packages -type f 2>/dev/null || echo "No packages directory"
 
     - name: Install apt-utils
       run: |
