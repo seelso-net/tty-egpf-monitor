@@ -239,10 +239,20 @@ jobs:
           fi
         fi
         
+        # Update pkg-config to use the new libbpf
+        if [ -f /usr/local/lib/pkgconfig/libbpf.pc ]; then
+          echo "Updating pkg-config configuration..."
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
+        fi
+        
         # Verify the libbpf version
         echo "libbpf version check:"
         if command -v pkg-config >/dev/null 2>&1; then
+          echo "pkg-config libbpf version:"
           pkg-config --modversion libbpf || echo "pkg-config not available"
+          echo "pkg-config libbpf libs:"
+          pkg-config --libs libbpf || echo "pkg-config not available"
         fi
         
         # Check where libbpf was actually installed
@@ -286,7 +296,7 @@ jobs:
         }
         EOF
         
-        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -lbpf
+        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib -lbpf -Wl,-rpath,/usr/local/lib
         /tmp/test_libbpf
         rm -f /tmp/test_libbpf /tmp/test_libbpf.c
 
