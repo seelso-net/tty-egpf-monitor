@@ -53,8 +53,15 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 	$(BPFTOOL) gen skeleton $< > $@
 
 # Userspace daemon and CLI
+# Use system libbpf if building for Debian package
+ifdef DEB_BUILD_ARCH
+LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
+else
+LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+endif
+
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
-	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ $(LIBBPF_LIBS)
 
 build/tty-egpf-monitor: src/cli.c | build
 	$(CC) $(CFLAGS) $(INCLUDES) src/cli.c -o $@ -lpthread
