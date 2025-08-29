@@ -86,21 +86,50 @@ jobs:
         
         # Verify libbpf 1.6.2 is installed
         echo "Verifying libbpf 1.6.2 installation:"
-        if [ -f /usr/local/lib/libbpf.so.1 ]; then
-          echo "libbpf.so.1 found in /usr/local/lib"
-          ls -la /usr/local/lib/libbpf.so*
-        elif [ -f /usr/local/lib/libbpf.so.1.6.2 ]; then
-          echo "libbpf.so.1.6.2 found in /usr/local/lib"
-          ls -la /usr/local/lib/libbpf.so*
+        
+        # Check both lib and lib64 directories (64-bit systems use lib64)
+        LIBBPF_FOUND=false
+        
+        # Check /usr/local/lib64 first (64-bit systems)
+        if [ -f /usr/local/lib64/libbpf.so.1 ]; then
+          echo "libbpf.so.1 found in /usr/local/lib64"
+          ls -la /usr/local/lib64/libbpf.so*
+          LIBBPF_FOUND=true
+        elif [ -f /usr/local/lib64/libbpf.so.1.6.2 ]; then
+          echo "libbpf.so.1.6.2 found in /usr/local/lib64"
+          ls -la /usr/local/lib64/libbpf.so*
           # Create symlink if needed
-          if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
-            ln -sf /usr/local/lib/libbpf.so.1.6.2 /usr/local/lib/libbpf.so.1
-            echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2"
+          if [ ! -f /usr/local/lib64/libbpf.so.1 ]; then
+            ln -sf /usr/local/lib64/libbpf.so.1.6.2 /usr/local/lib64/libbpf.so.1
+            echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2 in /usr/local/lib64"
           fi
-        else
-          echo "ERROR: libbpf.so.1 or libbpf.so.1.6.2 not found in /usr/local/lib"
+          LIBBPF_FOUND=true
+        fi
+        
+        # Check /usr/local/lib (32-bit systems or fallback)
+        if [ "$LIBBPF_FOUND" = "false" ]; then
+          if [ -f /usr/local/lib/libbpf.so.1 ]; then
+            echo "libbpf.so.1 found in /usr/local/lib"
+            ls -la /usr/local/lib/libbpf.so*
+            LIBBPF_FOUND=true
+          elif [ -f /usr/local/lib/libbpf.so.1.6.2 ]; then
+            echo "libbpf.so.1.6.2 found in /usr/local/lib"
+            ls -la /usr/local/lib/libbpf.so*
+            # Create symlink if needed
+            if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
+              ln -sf /usr/local/lib/libbpf.so.1.6.2 /usr/local/lib/libbpf.so.1
+              echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2 in /usr/local/lib"
+            fi
+            LIBBPF_FOUND=true
+          fi
+        fi
+        
+        if [ "$LIBBPF_FOUND" = "false" ]; then
+          echo "ERROR: libbpf.so.1 or libbpf.so.1.6.2 not found in /usr/local/lib or /usr/local/lib64"
           echo "Available files in /usr/local/lib:"
           ls -la /usr/local/lib/ || true
+          echo "Available files in /usr/local/lib64:"
+          ls -la /usr/local/lib64/ || true
           exit 1
         fi
         
@@ -320,21 +349,50 @@ jobs:
         
         # Verify libbpf 1.6.2 is installed
         echo "Verifying libbpf 1.6.2 installation:"
-        if [ -f /usr/local/lib/libbpf.so.1 ]; then
-          echo "libbpf.so.1 found in /usr/local/lib"
-          ls -la /usr/local/lib/libbpf.so*
-        elif [ -f /usr/local/lib/libbpf.so.1.6.2 ]; then
-          echo "libbpf.so.1.6.2 found in /usr/local/lib"
-          ls -la /usr/local/lib/libbpf.so*
+        
+        # Check both lib and lib64 directories (64-bit systems use lib64)
+        LIBBPF_FOUND=false
+        
+        # Check /usr/local/lib64 first (64-bit systems)
+        if [ -f /usr/local/lib64/libbpf.so.1 ]; then
+          echo "libbpf.so.1 found in /usr/local/lib64"
+          ls -la /usr/local/lib64/libbpf.so*
+          LIBBPF_FOUND=true
+        elif [ -f /usr/local/lib64/libbpf.so.1.6.2 ]; then
+          echo "libbpf.so.1.6.2 found in /usr/local/lib64"
+          ls -la /usr/local/lib64/libbpf.so*
           # Create symlink if needed
-          if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
-            ln -sf /usr/local/lib/libbpf.so.1.6.2 /usr/local/lib/libbpf.so.1
-            echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2"
+          if [ ! -f /usr/local/lib64/libbpf.so.1 ]; then
+            ln -sf /usr/local/lib64/libbpf.so.1.6.2 /usr/local/lib64/libbpf.so.1
+            echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2 in /usr/local/lib64"
           fi
-        else
-          echo "ERROR: libbpf.so.1 or libbpf.so.1.6.2 not found in /usr/local/lib"
+          LIBBPF_FOUND=true
+        fi
+        
+        # Check /usr/local/lib (32-bit systems or fallback)
+        if [ "$LIBBPF_FOUND" = "false" ]; then
+          if [ -f /usr/local/lib/libbpf.so.1 ]; then
+            echo "libbpf.so.1 found in /usr/local/lib"
+            ls -la /usr/local/lib/libbpf.so*
+            LIBBPF_FOUND=true
+          elif [ -f /usr/local/lib/libbpf.so.1.6.2 ]; then
+            echo "libbpf.so.1.6.2 found in /usr/local/lib"
+            ls -la /usr/local/lib/libbpf.so*
+            # Create symlink if needed
+            if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
+              ln -sf /usr/local/lib/libbpf.so.1.6.2 /usr/local/lib/libbpf.so.1
+              echo "Created symlink libbpf.so.1 -> libbpf.so.1.6.2 in /usr/local/lib"
+            fi
+            LIBBPF_FOUND=true
+          fi
+        fi
+        
+        if [ "$LIBBPF_FOUND" = "false" ]; then
+          echo "ERROR: libbpf.so.1 or libbpf.so.1.6.2 not found in /usr/local/lib or /usr/local/lib64"
           echo "Available files in /usr/local/lib:"
           ls -la /usr/local/lib/ || true
+          echo "Available files in /usr/local/lib64:"
+          ls -la /usr/local/lib64/ || true
           exit 1
         fi
         

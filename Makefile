@@ -67,9 +67,9 @@ ifdef DEB_BUILD_ARCH
   LIBBPF_CFLAGS := -I/usr/include
   LIBBPF_LDFLAGS := -L/usr/lib/x86_64-linux-gnu
 else ifeq ($(STATIC_BPF),1)
-  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
-  LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+  LIBBPF_LIBS := -L/usr/local/lib64 -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib64 -Wl,-rpath,/usr/lib/x86_64-linux-gnu
 endif
 
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
