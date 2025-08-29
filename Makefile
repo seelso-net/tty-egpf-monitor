@@ -62,10 +62,10 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 #    so the binary finds the custom libbpf shared object at runtime.
 
 ifdef DEB_BUILD_ARCH
-  LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
-  # Force use of system libbpf for Debian builds to ensure runtime compatibility
-  LIBBPF_CFLAGS := -I/usr/include
-  LIBBPF_LDFLAGS := -L/usr/lib/x86_64-linux-gnu
+  # For Debian builds, use the built libbpf 1.6.2 that's already on the target machine
+  LIBBPF_LIBS := -L/usr/local/lib64 -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib64
+  LIBBPF_CFLAGS := -I/usr/local/include
+  LIBBPF_LDFLAGS := -L/usr/local/lib64
 else ifeq ($(STATIC_BPF),1)
   LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
