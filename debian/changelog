@@ -1,11 +1,12 @@
-tty-egpf-monitor (0.3.3-1) unstable; urgency=medium
+tty-egpf-monitor (0.3.4-1) unstable; urgency=medium
 
   * Add GitHub Actions workflow for automated releases
   * Fix systemd service file selection for Ubuntu 22.04
   * Add i386 architecture support
   * Improve APT repository structure
+  * Fix GitHub Actions version update in changelog
 
- -- Adrian <adrian@example.com>  Thu, 29 Aug 2025 02:00:00 +0200
+ -- Adrian <adrian@example.com>  Thu, 29 Aug 2025 02:10:00 +0200
 
 tty-egpf-monitor (0.3.0-1) unstable; urgency=medium
 

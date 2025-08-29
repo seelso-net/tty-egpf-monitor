@@ -118,8 +118,10 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
-        sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
-        sed -i "s/$(date -R)/$(date -R)/" debian/changelog
+        # Update the first version found in changelog
+        sed -i "1,/^tty-egpf-monitor/{s/^tty-egpf-monitor ([^)]*)/tty-egpf-monitor ($VERSION-1)/}" debian/changelog
+        echo "Updated changelog to version $VERSION-1"
+        head -n 10 debian/changelog
 
     - name: Clean Debian outputs
       run: |
