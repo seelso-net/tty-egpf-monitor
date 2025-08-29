@@ -1,7 +1,7 @@
 # Simple build for CO-RE eBPF + userspace loader
 # Modified for Ubuntu 22.04 with available kernel headers
 
-BPF_CLANG ?= /home/adrian/clang-download/clang-12.0.1/bin/clang
+BPF_CLANG ?= clang
 CC ?= gcc
 # Find working bpftool - prefer specific paths over the wrapper script
 BPFTOOL ?= $(shell \

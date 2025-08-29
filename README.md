@@ -44,9 +44,9 @@ We publish .deb packages and an apt repository on the `gh-pages` branch. After a
 This package is designed to work on multiple Ubuntu versions:
 
 - **Ubuntu 24.04 (Noble)**: Native support with libbpf1
-- **Ubuntu 22.04 (Jammy)**: Enhanced compatibility with automatic libbpf upgrade
+- **Ubuntu 22.04 (Jammy)**: Enhanced compatibility with libbpf version checking
 
-For Ubuntu 22.04, the package automatically detects the older libbpf version and installs a compatible newer version during installation. This ensures full eBPF functionality without manual intervention.
+For Ubuntu 22.04, the daemon automatically checks the libbpf version and provides clear error messages if an incompatible version is detected. This ensures reliable eBPF functionality with clear guidance for users.
 
 1) Install repository public key and add the apt source:
 ```bash
@@ -133,16 +133,16 @@ sudo tty-egpf-monitord \
 
 If you encounter libbpf-related errors on Ubuntu 22.04:
 
-1. **Automatic Fix**: The package should automatically install a compatible libbpf version during installation
-2. **Manual Fix**: If automatic installation fails, you can manually install a newer libbpf:
-   ```bash
-   sudo apt-get install -y git build-essential libelf-dev zlib1g-dev
-   cd /tmp
-   git clone --depth 1 https://github.com/libbpf/libbpf.git
-   cd libbpf/src
-   sudo make install
-   sudo ldconfig
-   ```
+The daemon will automatically check the libbpf version and fail with a clear error message if an incompatible version is detected. To fix this, install a newer libbpf:
+
+```bash
+sudo apt-get install -y git build-essential libelf-dev zlib1g-dev
+cd /tmp
+git clone --depth 1 https://github.com/libbpf/libbpf.git
+cd libbpf/src
+sudo make install
+sudo ldconfig
+```
 
 ### Common Issues
 

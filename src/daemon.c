@@ -70,6 +70,31 @@ static void save_config(void);
 static void load_config(void);
 static void scan_existing_fds(const char *devpath, uint32_t port_idx);
 
+// Check libbpf version compatibility
+static int check_libbpf_version(void)
+{
+    unsigned int major = libbpf_major_version();
+    unsigned int minor = libbpf_minor_version();
+    const char *version_str = libbpf_version_string();
+    
+    fprintf(stderr, "libbpf version: %u.%u (%s)\n", major, minor, version_str);
+    
+    // Check if version is compatible (need at least 0.8.0 for proper skeleton support)
+    if (major == 0 && minor < 8) {
+        fprintf(stderr, "ERROR: libbpf version %u.%u is not compatible\n", major, minor);
+        fprintf(stderr, "ERROR: This version has known issues with BPF skeleton attachment\n");
+        fprintf(stderr, "ERROR: Please upgrade to libbpf 0.8.0 or newer\n");
+        fprintf(stderr, "ERROR: On Ubuntu 22.04, you can install a newer version with:\n");
+        fprintf(stderr, "ERROR:   sudo apt-get install -y git build-essential libelf-dev zlib1g-dev\n");
+        fprintf(stderr, "ERROR:   cd /tmp && git clone --depth 1 https://github.com/libbpf/libbpf.git\n");
+        fprintf(stderr, "ERROR:   cd libbpf/src && sudo make install && sudo ldconfig\n");
+        return -1;
+    }
+    
+    fprintf(stderr, "libbpf version check: PASSED\n");
+    return 0;
+}
+
 static void log_event_json(const struct event *e)
 {
     uint32_t idx = e->port_idx;
@@ -618,8 +643,12 @@ int main(int argc, char **argv)
 
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
     
+    // Check libbpf version compatibility first
+    if (check_libbpf_version() != 0) {
+        return 1;
+    }
+    
     // Add diagnostic information
-    fprintf(stderr, "libbpf version: %s\n", "checking...");
     fprintf(stderr, "Kernel version: ");
     FILE *kver = fopen("/proc/version", "r");
     if (kver) {

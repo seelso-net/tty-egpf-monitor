@@ -2,6 +2,9 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
+  push:
     tags:
       - 'v*'
 
@@ -115,19 +118,33 @@ jobs:
         make clean
         make
 
-    - name: Update changelog with version
+    - name: Check if this is a tag release
+      id: check_tag
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "is_tag=true" >> $GITHUB_OUTPUT
+          echo "This is a tag release, will build packages"
+        else
+          echo "is_tag=false" >> $GITHUB_OUTPUT
+          echo "This is a push to main, build test only"
+        fi
+
+    - name: Update changelog with version (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
         sed -i "s/$(date -R)/$(date -R)/" debian/changelog
 
-    - name: Clean Debian outputs
+    - name: Clean Debian outputs (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         rm -f ../*.deb ../*.buildinfo ../*.changes || true
         rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
 
-    - name: Build Debian package
+    - name: Build Debian package (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         echo "Building package for Ubuntu 24.04 (noble)"
         echo "Final debian/control:"
@@ -136,7 +153,8 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy and rename Debian packages
+    - name: Copy and rename Debian packages (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         mkdir -p noble-packages
         for f in ../*.deb; do
@@ -144,7 +162,8 @@ jobs:
           cp "$f" "noble-packages/${base}~noble.deb"
         done
 
-    - name: Upload noble packages
+    - name: Upload noble packages (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: noble-packages
@@ -186,10 +205,10 @@ jobs:
           devscripts \
           dh-make
 
-    - name: Install correct libbpf version
+    - name: Install compatible libbpf version
       run: |
-        # For jammy, build and install newer libbpf to fix compatibility issues
-        echo "Ubuntu 22.04 (jammy) detected, building newer libbpf for compatibility"
+        # For jammy, build and install newer libbpf to ensure compatibility
+        echo "Ubuntu 22.04 (jammy) detected, building compatible libbpf version"
         
         # Install build dependencies for libbpf
         apt-get install -y libelf-dev zlib1g-dev
@@ -201,14 +220,40 @@ jobs:
         make && make install
         ldconfig
         
-        # Verify the newer libbpf is available
-        echo "Checking pkg-config libbpf configuration:"
-        pkg-config --libs --cflags libbpf || echo "pkg-config not available, but libbpf installed"
+        # Verify the libbpf version
+        echo "libbpf version check:"
+        if command -v pkg-config >/dev/null 2>&1; then
+          pkg-config --modversion libbpf || echo "pkg-config not available"
+        fi
         
         # Verify libbpf.so.1 is available
         ls -la /usr/local/lib/libbpf.so*
-        echo "libbpf version check:"
-        strings /usr/local/lib/libbpf.so.1 | grep -i "libbpf" | head -1
+        
+        # Test libbpf version programmatically
+        echo "Testing libbpf version compatibility..."
+        cat > /tmp/test_libbpf.c << 'EOF'
+        #include <stdio.h>
+        #include <bpf/libbpf.h>
+        int main() {
+            unsigned int major, minor, patch;
+            int ret = libbpf_version(&major, &minor, &patch);
+            if (ret != 0) {
+                printf("ERROR: Failed to get libbpf version\n");
+                return 1;
+            }
+            printf("libbpf version: %u.%u.%u\n", major, minor, patch);
+            if (major == 0 && minor < 8) {
+                printf("ERROR: Incompatible libbpf version\n");
+                return 1;
+            }
+            printf("libbpf version check: PASSED\n");
+            return 0;
+        }
+        EOF
+        
+        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -lbpf
+        /tmp/test_libbpf
+        rm -f /tmp/test_libbpf /tmp/test_libbpf.c
 
     - name: Ensure bpftool
       run: |
@@ -266,23 +311,38 @@ jobs:
         make clean
         make
 
-    - name: Update changelog with version
+    - name: Check if this is a tag release
+      id: check_tag
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "is_tag=true" >> $GITHUB_OUTPUT
+          echo "This is a tag release, will build packages"
+        else
+          echo "is_tag=false" >> $GITHUB_OUTPUT
+          echo "This is a push to main, build test only"
+        fi
+
+    - name: Update changelog with version (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
         sed -i "s/$(date -R)/$(date -R)/" debian/changelog
 
-    - name: Use jammy control file
+    - name: Use jammy control file (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         cp debian/control.jammy debian/control
 
-    - name: Clean Debian outputs
+    - name: Clean Debian outputs (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         rm -f ../*.deb ../*.buildinfo ../*.changes || true
         rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
 
-    - name: Build Debian package
+    - name: Build Debian package (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         echo "Building package for Ubuntu 22.04 (jammy)"
         echo "Final debian/control:"
@@ -291,7 +351,8 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy and rename Debian packages
+    - name: Copy and rename Debian packages (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       run: |
         mkdir -p jammy-packages
         for f in ../*.deb; do
@@ -299,7 +360,8 @@ jobs:
           cp "$f" "jammy-packages/${base}~jammy.deb"
         done
 
-    - name: Upload jammy packages
+    - name: Upload jammy packages (tag only)
+      if: steps.check_tag.outputs.is_tag == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: jammy-packages
@@ -309,6 +371,7 @@ jobs:
   publish-apt-repo:
     needs: [build-noble, build-jammy]
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
       pages: write

@@ -10,33 +10,13 @@ case "$1" in
     # Create log directory
     install -d -m 0755 /var/log/tty-egpf-monitor
     
-    # Handle libbpf compatibility for Ubuntu 22.04
+    # Check libbpf compatibility for Ubuntu 22.04
     if [ -f /etc/os-release ] && grep -q "jammy" /etc/os-release; then
       echo "Ubuntu 22.04 detected, checking libbpf compatibility..."
       
-      # Check if we need to install newer libbpf
-      if ! ldconfig -p | grep -q "libbpf.so.1"; then
-        echo "Installing newer libbpf for Ubuntu 22.04 compatibility..."
-        
-        # Install build dependencies
-        apt-get update -qq
-        apt-get install -y --no-install-recommends git build-essential libelf-dev zlib1g-dev
-        
-        # Build and install newer libbpf
-        cd /tmp
-        git clone --depth 1 https://github.com/libbpf/libbpf.git
-        cd libbpf/src
-        make -j$(nproc) && make install
-        ldconfig
-        
-        # Clean up
-        cd /
-        rm -rf /tmp/libbpf
-        
-        echo "Newer libbpf installed successfully"
-      else
-        echo "libbpf.so.1 already available"
-      fi
+      # The daemon will check the libbpf version and fail if incompatible
+      # This is cleaner than trying to install a newer version automatically
+      echo "libbpf version compatibility will be checked when the daemon starts"
     fi
     # Set capabilities for eBPF access
     if command -v setcap >/dev/null 2>&1; then

@@ -1,12 +1,13 @@
-tty-egpf-monitor (0.4.1-1) unstable; urgency=medium
+tty-egpf-monitor (0.4.2-1) unstable; urgency=medium
 
   * Initial release
   * Advanced serial port monitoring with eBPF technology
   * Dual-mode operation (active/passive monitoring)
   * Real-time data capture and analysis
   * eBPF-based packet filtering
-  * Enhanced Ubuntu 22.04 compatibility with automatic libbpf upgrade
+  * Enhanced Ubuntu 22.04 compatibility with libbpf version checking
   * Fixed BPF skeleton attachment issues on older libbpf versions
   * Added comprehensive troubleshooting documentation
+  * Fixed CI build issues and improved workflow triggers
 
  -- Adrian <adrian@example.com>  Mon, 26 Aug 2025 23:00:00 +0000
