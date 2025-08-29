@@ -72,8 +72,17 @@ jobs:
         cd /tmp
         git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
         cd libbpf/src
-        make && make install
+        make
+        
+        # Install with explicit paths to ensure proper installation
+        make install PREFIX=/usr/local
         ldconfig
+        
+        # Verify what was actually installed
+        echo "Checking installation results:"
+        ls -la /usr/local/lib/ || echo "No /usr/local/lib directory"
+        ls -la /usr/local/include/ | grep bpf || echo "No bpf headers found"
+        find /usr/local -name "libbpf*" 2>/dev/null || echo "No libbpf files found in /usr/local"
         
         # Verify libbpf 1.6.2 is installed
         echo "Verifying libbpf 1.6.2 installation:"
@@ -297,8 +306,17 @@ jobs:
         cd /tmp
         git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
         cd libbpf/src
-        make && make install
+        make
+        
+        # Install with explicit paths to ensure proper installation
+        make install PREFIX=/usr/local
         ldconfig
+        
+        # Verify what was actually installed
+        echo "Checking installation results:"
+        ls -la /usr/local/lib/ || echo "No /usr/local/lib directory"
+        ls -la /usr/local/include/ | grep bpf || echo "No bpf headers found"
+        find /usr/local -name "libbpf*" 2>/dev/null || echo "No libbpf files found in /usr/local"
         
         # Verify libbpf 1.6.2 is installed
         echo "Verifying libbpf 1.6.2 installation:"
