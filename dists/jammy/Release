@@ -1,0 +1,22 @@
+Architectures: amd64
+Codename: jammy
+Components: main
+Date: Fri, 29 Aug 2025 14:48:04 +0000
+Label: tty-egpf-monitor
+Suite: jammy
+MD5Sum:
+ 60ac6e15c97b3b7302eee318f32ab020              129 Release
+ 3cff40e1ceea993ee3c1809cc881fe48             2035 main/binary-amd64/Packages
+ 53f44fcd86cebe5496fe8f53f1639377             1103 main/binary-amd64/Packages.gz
+SHA1:
+ 6d06c687e7113d96f2caaf0fa4c1452c894a0661              129 Release
+ ef39519467c6203bc98f4640afb334edfdf9f2ab             2035 main/binary-amd64/Packages
+ fc6908745387b7393f2c91c0eca5e5cfe36f9c9c             1103 main/binary-amd64/Packages.gz
+SHA256:
+ 1db7cb4a6575a048efde31643e38b8443a19e1548e471ab34b7034ca03ced1ba              129 Release
+ 03eb59fd152e04b5ba8f1f4804f677210a56ae163daeefd683e0bc6a5d138cb6             2035 main/binary-amd64/Packages
+ 194b1fd5d480089907cf07b7c568592cf398b0587b094001834da8ecc9e2264b             1103 main/binary-amd64/Packages.gz
+SHA512:
+ fac7a26c6e823159af9ad0ab7e1985e8d887863ca9f9a0efb0f79e3af29053c7e6cdc92d3bda96f5951b19d7ab7d50cd69a79338b1236cb2bba62eada31fff37              129 Release
+ a037af407798ad031336f11409d333bc7116751f2b354a561553d101c498f4fef8e0f01169d614bf62368c7fd424db7f825956e74fc6d171f64fa3d4dba6c4da             2035 main/binary-amd64/Packages
+ 08b6c25d1e03c55986b29cc9e612b84feed693d3055eaaf1c13d67cbf34a61fe70fb936f42fb462482282fa994a71e14ccaad58af2c88008802e17acb8eb6893             1103 main/binary-amd64/Packages.gz
