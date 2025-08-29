@@ -8,10 +8,23 @@ on:
       - 'v*'
 
 jobs:
+  # Test build on main push
+  test-build:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Test build
+      run: |
+        echo "Testing build on main branch"
+        # Add build test commands here if needed
+
   # Build for Ubuntu 24.04 (noble) - existing job
   build-noble:
     runs-on: ubuntu-24.04
     container: ubuntu:24.04
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
       pages: write
@@ -122,30 +135,29 @@ jobs:
       run: |
         echo "DEBUG: GITHUB_REF = $GITHUB_REF"
         echo "DEBUG: GITHUB_EVENT_NAME = $GITHUB_EVENT_NAME"
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
+        echo "DEBUG: GITHUB_REF_TYPE = $GITHUB_REF_TYPE"
+        if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
           echo "is_tag=true" >> $GITHUB_OUTPUT
           echo "This is a tag release, will build packages"
         else
           echo "is_tag=false" >> $GITHUB_OUTPUT
           echo "This is a push to main, build test only"
         fi
+        echo "DEBUG: is_tag value set to: $(cat $GITHUB_OUTPUT || echo 'empty')"
 
-    - name: Update changelog with version (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Update changelog with version
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
         sed -i "s/$(date -R)/$(date -R)/" debian/changelog
 
-    - name: Clean Debian outputs (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Clean Debian outputs
       run: |
         rm -f ../*.deb ../*.buildinfo ../*.changes || true
         rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
 
-    - name: Build Debian package (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Build Debian package
       run: |
         echo "Building package for Ubuntu 24.04 (noble)"
         echo "Final debian/control:"
@@ -154,8 +166,7 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy and rename Debian packages (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Copy and rename Debian packages
       run: |
         mkdir -p noble-packages
         for f in ../*.deb; do
@@ -163,8 +174,7 @@ jobs:
           cp "$f" "noble-packages/${base}~noble.deb"
         done
 
-    - name: Upload noble packages (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Upload noble packages
       uses: actions/upload-artifact@v4
       with:
         name: noble-packages-${{ github.ref_name }}
@@ -193,6 +203,7 @@ jobs:
   build-jammy:
     runs-on: ubuntu-latest
     container: ubuntu:22.04
+    if: startsWith(github.ref, 'refs/tags/')
     
     steps:
     - name: Checkout code
@@ -382,35 +393,33 @@ jobs:
       run: |
         echo "DEBUG: GITHUB_REF = $GITHUB_REF"
         echo "DEBUG: GITHUB_EVENT_NAME = $GITHUB_EVENT_NAME"
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
+        echo "DEBUG: GITHUB_REF_TYPE = $GITHUB_REF_TYPE"
+        if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
           echo "is_tag=true" >> $GITHUB_OUTPUT
           echo "This is a tag release, will build packages"
         else
           echo "is_tag=false" >> $GITHUB_OUTPUT
           echo "This is a push to main, build test only"
         fi
+        echo "DEBUG: is_tag value set to: $(cat $GITHUB_OUTPUT || echo 'empty')"
 
-    - name: Update changelog with version (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Update changelog with version
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
         sed -i "s/$(date -R)/$(date -R)/" debian/changelog
 
-    - name: Use jammy control file (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Use jammy control file
       run: |
         cp debian/control.jammy debian/control
 
-    - name: Clean Debian outputs (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Clean Debian outputs
       run: |
         rm -f ../*.deb ../*.buildinfo ../*.changes || true
         rm -rf debian/tty-egpf-monitor debian/tty-egpf-monitord debian/tty-egpf-monitor-cli || true
 
-    - name: Build Debian package (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Build Debian package
       run: |
         echo "Building package for Ubuntu 22.04 (jammy)"
         echo "Final debian/control:"
@@ -419,8 +428,7 @@ jobs:
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy and rename Debian packages (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Copy and rename Debian packages
       run: |
         mkdir -p jammy-packages
         for f in ../*.deb; do
@@ -428,8 +436,7 @@ jobs:
           cp "$f" "jammy-packages/${base}~jammy.deb"
         done
 
-    - name: Upload jammy packages (tag only)
-      if: steps.check_tag.outputs.is_tag == 'true'
+    - name: Upload jammy packages
       uses: actions/upload-artifact@v4
       with:
         name: jammy-packages-${{ github.ref_name }}
