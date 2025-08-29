@@ -196,12 +196,7 @@ jobs:
     - name: Move packages to current directory
       run: |
         mv packages/*/*.deb . || true
-        # Remove distribution suffix for pool
-        for deb in *_jammy.deb *_noble.deb; do
-          [ -f "$deb" ] || continue
-          newname=$(echo "$deb" | sed 's/_\(jammy\|noble\)\.deb$/.deb/')
-          mv "$deb" "$newname"
-        done
+        echo "All packages:"
         ls -la *.deb
     
     - name: Install APT tools
@@ -229,12 +224,28 @@ jobs:
           cd -
         }
 
-        # Create pool directory
-        mkdir -p /tmp/apt-repo/pool/main
-        cp *.deb /tmp/apt-repo/pool/main/ 2>/dev/null || true
+        # Create pool directory structure for each distribution
+        for CODENAME in noble jammy; do
+          mkdir -p /tmp/apt-repo/pool/${CODENAME}/main
+        done
         
-        echo "Packages in pool:"
-        ls -la /tmp/apt-repo/pool/main/ 2>/dev/null || echo "No packages"
+        # Copy packages to distribution-specific pools
+        for deb in *_jammy.deb; do
+          [ -f "$deb" ] || continue
+          # Remove distribution suffix when copying to pool
+          newname=$(echo "$deb" | sed 's/_jammy\.deb$/.deb/')
+          cp "$deb" "/tmp/apt-repo/pool/jammy/main/$newname"
+        done
+        
+        for deb in *_noble.deb; do
+          [ -f "$deb" ] || continue
+          # Remove distribution suffix when copying to pool
+          newname=$(echo "$deb" | sed 's/_noble\.deb$/.deb/')
+          cp "$deb" "/tmp/apt-repo/pool/noble/main/$newname"
+        done
+        
+        echo "Packages in pools:"
+        ls -la /tmp/apt-repo/pool/*/main/ 2>/dev/null || echo "No packages"
 
         # Update packages for both codenames
         for CODENAME in noble jammy; do
@@ -242,7 +253,8 @@ jobs:
           mkdir -p /tmp/apt-repo/dists/${CODENAME}/main/binary-amd64
           cd /tmp/apt-repo
           
-          apt-ftparchive packages pool/main > dists/${CODENAME}/main/binary-amd64/Packages
+          # Generate packages from distribution-specific pool
+          apt-ftparchive packages pool/${CODENAME}/main > dists/${CODENAME}/main/binary-amd64/Packages
           gzip -c dists/${CODENAME}/main/binary-amd64/Packages > dists/${CODENAME}/main/binary-amd64/Packages.gz
           apt-ftparchive \
             -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
@@ -295,7 +307,9 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: '*.deb'
+        files: |
+          *_jammy.deb
+          *_noble.deb
         generate_release_notes: true
         draft: false
         prerelease: false
