@@ -150,7 +150,8 @@ jobs:
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         sed -i "s/1.0.0-1/$VERSION-1/" debian/changelog
-        sed -i "s/$(date -R)/$(date -R)/" debian/changelog
+        # Replace first parenthesised version in changelog with new version
+        sed -Ei "0,/tty-egpf-monitor \([^)]+\)/s//tty-egpf-monitor (${VERSION}-1)/" debian/changelog
 
     - name: Clean Debian outputs
       run: |
