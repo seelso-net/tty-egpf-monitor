@@ -517,7 +517,7 @@ static void handle_http_client(int cfd)
         char *body = strstr(buf, "\r\n\r\n");
         if (!body) { http_send(cfd, 400, "text/plain", "bad request"); close(cfd); return; }
         body += 4;
-        char dev[256] = {0}, logp[256] = {0};
+        char dev[256] = {0}, logp[512] = {0};
         // naive JSON extraction
         char *dp = strstr(body, "\"dev\"");
         char *lp = strstr(body, "\"log\"");
