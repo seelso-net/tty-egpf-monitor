@@ -1,46 +1,91 @@
 #!/bin/sh
 set -e
 
-case "$1" in
-  configure)
-    # Create runtime socket directory
-    install -d -m 0755 /run
-    # Ensure our socket path directory exists
-    install -d -m 0755 /run
-    # Create log directory
-    install -d -m 0755 /var/log/tty-egpf-monitor
-    
-    # Check libbpf compatibility for Ubuntu 22.04
-    if [ -f /etc/os-release ] && grep -q "jammy" /etc/os-release; then
-      echo "Ubuntu 22.04 detected, checking libbpf compatibility..."
-      
-      # The daemon will check the libbpf version and fail if incompatible
-      # This is cleaner than trying to install a newer version automatically
-      echo "libbpf version compatibility will be checked when the daemon starts"
-    fi
-    # Set capabilities for eBPF access
-    if command -v setcap >/dev/null 2>&1; then
-      setcap cap_bpf,cap_perfmon,cap_net_admin+ep /usr/bin/tty-egpf-monitord || true
-    fi
-    # Configure kernel for eBPF access
-    echo 1 > /proc/sys/kernel/unprivileged_bpf_disabled 2>/dev/null || true
-    # Enable necessary tracepoints
-    if [ -d /sys/kernel/debug/tracing ]; then
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_openat/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_exit_openat/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_close/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_exit_close/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_write/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_read/enable 2>/dev/null || true
-      echo 1 > /sys/kernel/debug/tracing/events/syscalls/sys_enter_ioctl/enable 2>/dev/null || true
-    fi
-    # Reload and enable systemd unit if available
-    if command -v systemctl >/dev/null 2>&1; then
-      systemctl daemon-reload || true
-      systemctl enable tty-egpf-monitord.service || true
-      systemctl restart tty-egpf-monitord.service || true
-    fi
-  ;;
- esac
+# Post-installation script for tty-egpf-monitord
+# This script ensures that libbpf 1.7.0 is available at runtime
 
-#DEBHELPER#
+case "$1" in
+    configure)
+        echo "Configuring tty-egpf-monitord..."
+        
+        # Check if we have a compatible libbpf version
+        if command -v pkg-config >/dev/null 2>&1; then
+            LIBBPF_VERSION=$(pkg-config --modversion libbpf 2>/dev/null || echo "unknown")
+            echo "Current libbpf version: $LIBBPF_VERSION"
+            
+            # Check if we need to build libbpf 1.7.0
+            NEED_LIBBPF_17=false
+            
+            if [ "$LIBBPF_VERSION" = "unknown" ]; then
+                echo "No libbpf found via pkg-config, will build 1.7.0"
+                NEED_LIBBPF_17=true
+            else
+                # Parse version and check if it's >= 1.7.0
+                MAJOR=$(echo "$LIBBPF_VERSION" | cut -d. -f1)
+                MINOR=$(echo "$LIBBPF_VERSION" | cut -d. -f2)
+                
+                if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 7 ]); then
+                    echo "libbpf version $LIBBPF_VERSION is too old, need 1.7.0 or newer"
+                    NEED_LIBBPF_17=true
+                else
+                    echo "libbpf version $LIBBPF_VERSION is compatible"
+                fi
+            fi
+            
+            if [ "$NEED_LIBBPF_17" = "true" ]; then
+                echo "Building libbpf 1.7.0..."
+                
+                # Install build dependencies
+                apt-get update
+                apt-get install -y --no-install-recommends \
+                    build-essential \
+                    git \
+                    libelf-dev \
+                    zlib1g-dev \
+                    pkg-config
+                
+                # Build and install libbpf 1.7.0
+                cd /tmp
+                git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
+                cd libbpf/src
+                make && make install
+                ldconfig
+                
+                # Clean up
+                cd /
+                rm -rf /tmp/libbpf
+                
+                echo "libbpf 1.7.0 installed successfully"
+            fi
+        else
+            echo "pkg-config not available, assuming libbpf is compatible"
+        fi
+        
+        # Create systemd service user if it doesn't exist
+        if ! getent passwd tty-egpf-monitor >/dev/null 2>&1; then
+            echo "Creating tty-egpf-monitor user..."
+            adduser --system --group --no-create-home --shell /bin/false tty-egpf-monitor
+        fi
+        
+        # Enable and start the service
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "Enabling tty-egpf-monitord service..."
+            systemctl daemon-reload
+            systemctl enable tty-egpf-monitord.service
+            echo "Starting tty-egpf-monitord service..."
+            systemctl start tty-egpf-monitord.service || echo "Warning: Failed to start service (may need manual configuration)"
+        fi
+        
+        echo "tty-egpf-monitord configuration completed"
+        ;;
+        
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+        
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

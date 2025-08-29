@@ -63,6 +63,9 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 
 ifdef DEB_BUILD_ARCH
   LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
+  # Force use of system libbpf for Debian builds
+  LIBBPF_CFLAGS := -I/usr/include
+  LIBBPF_LDFLAGS := -L/usr/lib/x86_64-linux-gnu
 else ifeq ($(STATIC_BPF),1)
   LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else

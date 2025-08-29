@@ -62,17 +62,55 @@ jobs:
 
     - name: Install correct libbpf version
       run: |
-        # For noble, ensure we have libbpf1 and remove any libbpf0
-        echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
-        apt-get install -y libbpf1 libbpf-dev
+        # For noble, build and install libbpf 1.7.0 to ensure compatibility
+        echo "Ubuntu 24.04 (noble) detected, building libbpf 1.7.0"
         
-        # Remove libbpf0 if it exists to ensure we link against libbpf1
-        apt-get remove -y libbpf0 || true
-        apt-get autoremove -y
+        # Install build dependencies for libbpf
+        apt-get install -y libelf-dev zlib1g-dev
         
-        # Verify pkg-config finds the correct libbpf
-        echo "Checking pkg-config libbpf configuration:"
-        pkg-config --libs --cflags libbpf
+        # Build and install libbpf 1.7.0
+        cd /tmp
+        git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
+        cd libbpf/src
+        make && make install
+        ldconfig
+        
+        # Verify libbpf 1.7.0 is installed
+        echo "Verifying libbpf 1.7.0 installation:"
+        if [ -f /usr/local/lib/libbpf.so.1 ]; then
+          echo "libbpf.so.1 found in /usr/local/lib"
+          ls -la /usr/local/lib/libbpf.so*
+        else
+          echo "ERROR: libbpf.so.1 not found in /usr/local/lib"
+          exit 1
+        fi
+        
+        # Test libbpf version programmatically
+        echo "Testing libbpf version compatibility..."
+        cat > /tmp/test_libbpf.c << 'EOF'
+        #include <stdio.h>
+        #include <bpf/libbpf.h>
+        int main() {
+            unsigned int major = libbpf_major_version();
+            unsigned int minor = libbpf_minor_version();
+            const char *version_str = libbpf_version_string();
+            
+            printf("libbpf version: %u.%u (%s)\n", major, minor, version_str);
+            
+            // Verify we have libbpf 1.7.0
+            if (major != 1 || minor < 7) {
+                printf("ERROR: Expected libbpf 1.7.0, got %u.%u\n", major, minor);
+                return 1;
+            }
+            
+            printf("libbpf version check: PASSED (1.7.0)\n");
+            return 0;
+        }
+        EOF
+        
+        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib -lbpf -Wl,-rpath,/usr/local/lib
+        /tmp/test_libbpf
+        rm -f /tmp/test_libbpf /tmp/test_libbpf.c
 
     - name: Ensure bpftool
       run: |
@@ -239,69 +277,26 @@ jobs:
 
     - name: Install compatible libbpf version
       run: |
-        # For jammy, build and install newer libbpf to ensure compatibility
-        echo "Ubuntu 22.04 (jammy) detected, building compatible libbpf version"
+        # For jammy, build and install libbpf 1.7.0 to ensure compatibility
+        echo "Ubuntu 22.04 (jammy) detected, building libbpf 1.7.0"
         
         # Install build dependencies for libbpf
         apt-get install -y libelf-dev zlib1g-dev
         
-        # Build and install newer libbpf
+        # Build and install libbpf 1.7.0
         cd /tmp
-        git clone --depth 1 https://github.com/libbpf/libbpf.git
+        git clone --depth 1 --branch v1.7.0 https://github.com/libbpf/libbpf.git
         cd libbpf/src
         make && make install
         ldconfig
         
-        # Ensure libbpf is in the expected location
-        if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
-          echo "libbpf not in /usr/local/lib, checking other locations..."
-          LIBBPF_LOCATION=$(find /usr -name "libbpf.so.1" 2>/dev/null | head -1)
-          if [ -n "$LIBBPF_LOCATION" ]; then
-            echo "Found libbpf at: $LIBBPF_LOCATION"
-            LIBBPF_DIR=$(dirname "$LIBBPF_LOCATION")
-            # Create symlink to /usr/local/lib if needed
-            if [ "$LIBBPF_DIR" != "/usr/local/lib" ]; then
-              mkdir -p /usr/local/lib
-              ln -sf "$LIBBPF_LOCATION" /usr/local/lib/libbpf.so.1
-              ln -sf "$LIBBPF_DIR/libbpf.so" /usr/local/lib/libbpf.so
-              echo "Created symlinks in /usr/local/lib"
-            fi
-          else
-            echo "ERROR: libbpf.so.1 not found anywhere"
-            exit 1
-          fi
-        fi
-        
-        # Update pkg-config to use the new libbpf
-        if [ -f /usr/local/lib/pkgconfig/libbpf.pc ]; then
-          echo "Updating pkg-config configuration..."
-          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
-        fi
-        
-        # Verify the libbpf version
-        echo "libbpf version check:"
-        if command -v pkg-config >/dev/null 2>&1; then
-          echo "pkg-config libbpf version:"
-          pkg-config --modversion libbpf || echo "pkg-config not available"
-          echo "pkg-config libbpf libs:"
-          pkg-config --libs libbpf || echo "pkg-config not available"
-        fi
-        
-        # Check where libbpf was actually installed
-        echo "Checking libbpf installation locations:"
-        find /usr -name "libbpf.so*" 2>/dev/null || true
-        find /usr/local -name "libbpf.so*" 2>/dev/null || true
-        
-        # Verify libbpf.so.1 is available in standard locations
+        # Verify libbpf 1.7.0 is installed
+        echo "Verifying libbpf 1.7.0 installation:"
         if [ -f /usr/local/lib/libbpf.so.1 ]; then
           echo "libbpf.so.1 found in /usr/local/lib"
           ls -la /usr/local/lib/libbpf.so*
-        elif [ -f /usr/lib/x86_64-linux-gnu/libbpf.so.1 ]; then
-          echo "libbpf.so.1 found in /usr/lib/x86_64-linux-gnu"
-          ls -la /usr/lib/x86_64-linux-gnu/libbpf.so*
         else
-          echo "ERROR: libbpf.so.1 not found in expected locations"
+          echo "ERROR: libbpf.so.1 not found in /usr/local/lib"
           exit 1
         fi
         
@@ -317,14 +312,13 @@ jobs:
             
             printf("libbpf version: %u.%u (%s)\n", major, minor, version_str);
             
-            // Check if version is compatible (need at least 0.8.0 for proper skeleton support)
-            if (major == 0 && minor < 8) {
-                printf("ERROR: libbpf version %u.%u is not compatible\n", major, minor);
-                printf("ERROR: This version has known issues with BPF skeleton attachment\n");
+            // Verify we have libbpf 1.7.0
+            if (major != 1 || minor < 7) {
+                printf("ERROR: Expected libbpf 1.7.0, got %u.%u\n", major, minor);
                 return 1;
             }
             
-            printf("libbpf version check: PASSED\n");
+            printf("libbpf version check: PASSED (1.7.0)\n");
             return 0;
         }
         EOF
