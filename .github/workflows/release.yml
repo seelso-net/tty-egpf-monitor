@@ -452,6 +452,21 @@ jobs:
       with:
         path: packages
 
+    - name: Install apt-utils
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apt-utils
+
+    - name: Debug - Check downloaded packages
+      run: |
+        echo "DEBUG: Checking downloaded packages..."
+        echo "DEBUG: Packages directory contents:"
+        ls -la packages/ 2>/dev/null || echo "No packages directory"
+        echo "DEBUG: Noble packages:"
+        ls -la packages/noble-packages/ 2>/dev/null || echo "No noble-packages directory"
+        echo "DEBUG: Jammy packages:"
+        ls -la packages/jammy-packages/ 2>/dev/null || echo "No jammy-packages directory"
+
     - name: Publish apt repo to gh-pages
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -459,7 +474,10 @@ jobs:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         REPO: ${{ github.repository }}
       run: |
-        set -e
+        set -ex
+        echo "DEBUG: Starting APT repository publishing..."
+        echo "DEBUG: GITHUB_REF = $GITHUB_REF"
+        echo "DEBUG: REPO = $REPO"
         git config --global user.name "github-actions"
         git config --global user.email "github-actions@users.noreply.github.com"
         rm -rf /tmp/apt-repo
@@ -539,9 +557,13 @@ jobs:
           done
         fi
 
+        echo "DEBUG: Adding files to git..."
         git add -A
+        echo "DEBUG: Committing changes..."
         git commit -m "Update apt repo for ${GITHUB_REF}" || git commit -m "Initialize apt repo"
+        echo "DEBUG: Pushing to gh-pages branch..."
         git push -u origin gh-pages
+        echo "DEBUG: APT repository publishing completed!"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
