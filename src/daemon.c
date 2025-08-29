@@ -697,7 +697,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "open skel failed: %s\n", strerror(errno));
         fprintf(stderr, "This might be due to bpftool/libbpf version mismatch\n");
         fprintf(stderr, "between build time and runtime.\n");
-        return 1; 
+        
+        fprintf(stderr, "FATAL: Cannot load BPF skeleton. This is likely due to:\n");
+        fprintf(stderr, "1. libbpf version mismatch between build and runtime\n");
+        fprintf(stderr, "2. BPF skeleton ABI incompatibility\n");
+        fprintf(stderr, "3. Missing or incompatible bpftool version\n");
+        fprintf(stderr, "\nPlease ensure the runtime environment has compatible libbpf/bpftool versions.\n");
+        return 1;
     }
     
     fprintf(stderr, "BPF skeleton opened successfully\n");

@@ -61,10 +61,10 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 # 3. Otherwise (local dev build) use whatever is in /usr/local/lib and keep rpath
 #    so the binary finds the custom libbpf shared object at runtime.
 
-ifeq ($(STATIC_BPF),1)
-  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
-else ifdef DEB_BUILD_ARCH
+ifdef DEB_BUILD_ARCH
   LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
+else ifeq ($(STATIC_BPF),1)
+  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
   LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
 endif
