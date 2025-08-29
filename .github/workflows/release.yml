@@ -268,17 +268,19 @@ jobs:
         #include <stdio.h>
         #include <bpf/libbpf.h>
         int main() {
-            unsigned int major, minor, patch;
-            int ret = libbpf_version(&major, &minor, &patch);
-            if (ret != 0) {
-                printf("ERROR: Failed to get libbpf version\n");
-                return 1;
-            }
-            printf("libbpf version: %u.%u.%u\n", major, minor, patch);
+            unsigned int major = libbpf_major_version();
+            unsigned int minor = libbpf_minor_version();
+            const char *version_str = libbpf_version_string();
+            
+            printf("libbpf version: %u.%u (%s)\n", major, minor, version_str);
+            
+            // Check if version is compatible (need at least 0.8.0 for proper skeleton support)
             if (major == 0 && minor < 8) {
-                printf("ERROR: Incompatible libbpf version\n");
+                printf("ERROR: libbpf version %u.%u is not compatible\n", major, minor);
+                printf("ERROR: This version has known issues with BPF skeleton attachment\n");
                 return 1;
             }
+            
             printf("libbpf version check: PASSED\n");
             return 0;
         }
