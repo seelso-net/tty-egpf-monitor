@@ -673,6 +673,23 @@ int main(int argc, char **argv)
         return 1;
     }
     
+    // Check system libbpf version and compatibility
+    check_system_libbpf_version();
+    
+    // Check runtime compatibility
+    if (check_runtime_compatibility() != 0) {
+        fprintf(stderr, "ERROR: Runtime compatibility check failed!\n");
+        fprintf(stderr, "ERROR: The system does not have a compatible libbpf version.\n");
+        fprintf(stderr, "ERROR: Please install a compatible version:\n");
+        fprintf(stderr, "ERROR:   sudo apt-get update\n");
+        fprintf(stderr, "ERROR:   sudo apt-get install -y libbpf-dev libbpf0\n");
+        fprintf(stderr, "ERROR:   sudo apt-get install -y linux-tools-common linux-tools-generic\n");
+        fprintf(stderr, "ERROR: Or build from source:\n");
+        fprintf(stderr, "ERROR:   cd /tmp && git clone --depth 1 https://github.com/libbpf/libbpf.git\n");
+        fprintf(stderr, "ERROR:   cd libbpf/src && sudo make install && sudo ldconfig\n");
+        return 1;
+    }
+    
     // Add diagnostic information
     fprintf(stderr, "Kernel version: ");
     FILE *kver = fopen("/proc/version", "r");
