@@ -219,14 +219,48 @@ jobs:
         make && make install
         ldconfig
         
+        # Ensure libbpf is in the expected location
+        if [ ! -f /usr/local/lib/libbpf.so.1 ]; then
+          echo "libbpf not in /usr/local/lib, checking other locations..."
+          LIBBPF_LOCATION=$(find /usr -name "libbpf.so.1" 2>/dev/null | head -1)
+          if [ -n "$LIBBPF_LOCATION" ]; then
+            echo "Found libbpf at: $LIBBPF_LOCATION"
+            LIBBPF_DIR=$(dirname "$LIBBPF_LOCATION")
+            # Create symlink to /usr/local/lib if needed
+            if [ "$LIBBPF_DIR" != "/usr/local/lib" ]; then
+              mkdir -p /usr/local/lib
+              ln -sf "$LIBBPF_LOCATION" /usr/local/lib/libbpf.so.1
+              ln -sf "$LIBBPF_DIR/libbpf.so" /usr/local/lib/libbpf.so
+              echo "Created symlinks in /usr/local/lib"
+            fi
+          else
+            echo "ERROR: libbpf.so.1 not found anywhere"
+            exit 1
+          fi
+        fi
+        
         # Verify the libbpf version
         echo "libbpf version check:"
         if command -v pkg-config >/dev/null 2>&1; then
           pkg-config --modversion libbpf || echo "pkg-config not available"
         fi
         
-        # Verify libbpf.so.1 is available
-        ls -la /usr/local/lib/libbpf.so*
+        # Check where libbpf was actually installed
+        echo "Checking libbpf installation locations:"
+        find /usr -name "libbpf.so*" 2>/dev/null || true
+        find /usr/local -name "libbpf.so*" 2>/dev/null || true
+        
+        # Verify libbpf.so.1 is available in standard locations
+        if [ -f /usr/local/lib/libbpf.so.1 ]; then
+          echo "libbpf.so.1 found in /usr/local/lib"
+          ls -la /usr/local/lib/libbpf.so*
+        elif [ -f /usr/lib/x86_64-linux-gnu/libbpf.so.1 ]; then
+          echo "libbpf.so.1 found in /usr/lib/x86_64-linux-gnu"
+          ls -la /usr/lib/x86_64-linux-gnu/libbpf.so*
+        else
+          echo "ERROR: libbpf.so.1 not found in expected locations"
+          exit 1
+        fi
         
         # Test libbpf version programmatically
         echo "Testing libbpf version compatibility..."
