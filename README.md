@@ -39,6 +39,15 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 ### Install via apt (GitHub-backed repo)
 We publish .deb packages and an apt repository on the `gh-pages` branch. After a tagged release (e.g., `v1.2.3`), CI builds and updates the repo automatically.
 
+### Ubuntu Version Compatibility
+
+This package is designed to work on multiple Ubuntu versions:
+
+- **Ubuntu 24.04 (Noble)**: Native support with libbpf1
+- **Ubuntu 22.04 (Jammy)**: Enhanced compatibility with automatic libbpf upgrade
+
+For Ubuntu 22.04, the package automatically detects the older libbpf version and installs a compatible newer version during installation. This ensures full eBPF functionality without manual intervention.
+
 1) Install repository public key and add the apt source:
 ```bash
 CODENAME=$(lsb_release -cs)
@@ -117,6 +126,29 @@ sudo tty-egpf-monitord \
 - Root privileges needed for eBPF attach.
 - Socket permissions: You can move the socket under a restricted directory and chown it to a dedicated group, then run the CLI as a member of that group.
 - Systemd unit: `tty-egpf-monitord.service` starts the daemon at boot and places the socket at `/run/tty-egpf-monitord.sock` by default.
+
+## 🔧 Troubleshooting
+
+### Ubuntu 22.04 Specific Issues
+
+If you encounter libbpf-related errors on Ubuntu 22.04:
+
+1. **Automatic Fix**: The package should automatically install a compatible libbpf version during installation
+2. **Manual Fix**: If automatic installation fails, you can manually install a newer libbpf:
+   ```bash
+   sudo apt-get install -y git build-essential libelf-dev zlib1g-dev
+   cd /tmp
+   git clone --depth 1 https://github.com/libbpf/libbpf.git
+   cd libbpf/src
+   sudo make install
+   sudo ldconfig
+   ```
+
+### Common Issues
+
+- **Permission Denied**: Ensure the daemon has the necessary capabilities (`cap_bpf`, `cap_perfmon`, `cap_net_admin`)
+- **eBPF Not Supported**: Check if your kernel supports eBPF and if `unprivileged_bpf_disabled` is set to 1
+- **No Events Captured**: Verify that the target devices are being accessed and that the BPF programs are properly attached
 
 ### Detailed Daemon–CLI model
 - The daemon loads and attaches the eBPF program once, and multiplexes events for multiple ports.

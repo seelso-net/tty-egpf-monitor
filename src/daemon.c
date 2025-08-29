@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <ctype.h>
-#include <systemd/sd-daemon.h>
+// #include <systemd/sd-daemon.h>  // Commented out for Ubuntu 22.04 compatibility
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -685,12 +685,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "HTTP server thread started\n");
     fprintf(stderr, "Socket path: %s\n", g_socket_path);
 
-    // Notify systemd that we're ready
-    if (sd_notify(1, "READY=1") < 0) {
-        fprintf(stderr, "Warning: sd_notify failed: %s\n", strerror(errno));
-    } else {
-        fprintf(stderr, "Systemd notification sent successfully\n");
-    }
+    // Notify systemd that we're ready (commented out for Ubuntu 22.04 compatibility)
+    // if (sd_notify(1, "READY=1") < 0) {
+    //     fprintf(stderr, "Warning: sd_notify failed: %s\n", strerror(errno));
+    // } else {
+    //     fprintf(stderr, "Systemd notification sent successfully\n");
+    // }
 
     fprintf(stderr, "Starting main event loop...\n");
     int loop_count = 0;

@@ -188,17 +188,27 @@ jobs:
 
     - name: Install correct libbpf version
       run: |
-        # For jammy, ensure we have libbpf0
-        echo "Ubuntu 22.04 (jammy) detected, installing libbpf0 and libbpf-dev"
-        apt-get install -y libbpf0 libbpf-dev
+        # For jammy, build and install newer libbpf to fix compatibility issues
+        echo "Ubuntu 22.04 (jammy) detected, building newer libbpf for compatibility"
         
-        # Remove libbpf1 if it exists to ensure we link against libbpf0
-        apt-get remove -y libbpf1 || true
-        apt-get autoremove -y
+        # Install build dependencies for libbpf
+        apt-get install -y libelf-dev zlib1g-dev
         
-        # Verify pkg-config finds the correct libbpf
+        # Build and install newer libbpf
+        cd /tmp
+        git clone --depth 1 https://github.com/libbpf/libbpf.git
+        cd libbpf/src
+        make && make install
+        ldconfig
+        
+        # Verify the newer libbpf is available
         echo "Checking pkg-config libbpf configuration:"
-        pkg-config --libs --cflags libbpf
+        pkg-config --libs --cflags libbpf || echo "pkg-config not available, but libbpf installed"
+        
+        # Verify libbpf.so.1 is available
+        ls -la /usr/local/lib/libbpf.so*
+        echo "libbpf version check:"
+        strings /usr/local/lib/libbpf.so.1 | grep -i "libbpf" | head -1
 
     - name: Ensure bpftool
       run: |

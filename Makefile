@@ -1,8 +1,8 @@
 # Simple build for CO-RE eBPF + userspace loader
-# Requires: clang, make, bpftool, libbpf-dev, libelf-dev, zlib1g-dev, pkg-config
+# Modified for Ubuntu 22.04 with available kernel headers
 
-BPF_CLANG ?= clang
-CC ?= cc
+BPF_CLANG ?= /home/adrian/clang-download/clang-12.0.1/bin/clang
+CC ?= gcc
 # Find working bpftool - prefer specific paths over the wrapper script
 BPFTOOL ?= $(shell \
 	for bpf in /usr/local/sbin/bpftool /usr/local/bin/bpftool $(shell find /usr/lib/linux-tools-* -name bpftool 2>/dev/null | head -1) bpftool; do \
@@ -29,7 +29,10 @@ endif
 CFLAGS := -O2 -g
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH)
 
-INCLUDES := -Ibuild -Isrc
+# Use available kernel headers for libbpf
+KERNEL_HEADERS := /usr/src/linux-headers-6.8.0-79-generic
+INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
+BPF_INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
 
 all: build/tty-egpf-monitord build/tty-egpf-monitor
 
@@ -43,7 +46,7 @@ build/vmlinux.h: | build
 
 # Build BPF object
 build/sniffer.bpf.o: src/sniffer.bpf.c build/vmlinux.h | build
-	$(BPF_CLANG) $(BPF_CFLAGS) -Ibuild -Isrc -c $< -o $@
+	$(BPF_CLANG) $(BPF_CFLAGS) $(BPF_INCLUDES) -c $< -o $@
 
 # Generate libbpf skeleton header
 build/sniffer.skel.h: build/sniffer.bpf.o | build
@@ -51,7 +54,7 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 
 # Userspace daemon and CLI
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
-	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ $(shell pkg-config --libs --cflags libbpf) -lelf -lz -lpthread -lsystemd
+	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib
 
 build/tty-egpf-monitor: src/cli.c | build
 	$(CC) $(CFLAGS) $(INCLUDES) src/cli.c -o $@ -lpthread

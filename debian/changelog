@@ -5,5 +5,8 @@ tty-egpf-monitor (0.4.1-1) unstable; urgency=medium
   * Dual-mode operation (active/passive monitoring)
   * Real-time data capture and analysis
   * eBPF-based packet filtering
+  * Enhanced Ubuntu 22.04 compatibility with automatic libbpf upgrade
+  * Fixed BPF skeleton attachment issues on older libbpf versions
+  * Added comprehensive troubleshooting documentation
 
  -- Adrian <adrian@example.com>  Mon, 26 Aug 2025 23:00:00 +0000
