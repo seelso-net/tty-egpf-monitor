@@ -690,9 +690,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "BTF not available: %s\n", strerror(errno));
     }
     
+    fprintf(stderr, "About to open BPF skeleton...\n");
+    
     g_skel = sniffer_bpf__open();
     if (!g_skel) { 
         fprintf(stderr, "open skel failed: %s\n", strerror(errno));
+        fprintf(stderr, "This might be due to bpftool/libbpf version mismatch\n");
+        fprintf(stderr, "between build time and runtime.\n");
         return 1; 
     }
     
