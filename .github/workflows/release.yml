@@ -447,12 +447,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Download all packages
+    - name: Download noble packages artifact
       uses: actions/download-artifact@v4
       with:
-        path: packages
-        pattern: "*-${{ github.ref_name }}"
-        merge-multiple: true
+        name: noble-packages-${{ github.ref_name }}
+        path: packages/noble
+
+    - name: Download jammy packages artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: jammy-packages-${{ github.ref_name }}
+        path: packages/jammy
 
     - name: Install apt-utils
       run: |
@@ -464,6 +469,10 @@ jobs:
         echo "DEBUG: Checking downloaded packages..."
         echo "DEBUG: Packages directory contents:"
         ls -la packages/ 2>/dev/null || echo "No packages directory"
+        echo "DEBUG: Noble artifact contents:"
+        ls -la packages/noble/ 2>/dev/null || echo "No packages/noble directory"
+        echo "DEBUG: Jammy artifact contents:"
+        ls -la packages/jammy/ 2>/dev/null || echo "No packages/jammy directory"
         echo "DEBUG: All subdirectories:"
         find packages/ -type d 2>/dev/null || echo "No subdirectories found"
         echo "DEBUG: All .deb files:"
@@ -503,8 +512,8 @@ jobs:
         
         # Copy packages to their respective pools (fail if none found)
         N_FOUND=0
-        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/noble/; N_FOUND=$((N_FOUND+1)); done < <(find packages -type f -name "*~noble.deb" 2>/dev/null)
-        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/jammy/; N_FOUND=$((N_FOUND+1)); done < <(find packages -type f -name "*~jammy.deb" 2>/dev/null)
+        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/noble/; N_FOUND=$((N_FOUND+1)); done < <(find packages/noble -type f -name "*~noble.deb" 2>/dev/null)
+        while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/jammy/; N_FOUND=$((N_FOUND+1)); done < <(find packages/jammy -type f -name "*~jammy.deb" 2>/dev/null)
         if [ "$N_FOUND" -eq 0 ]; then
           echo "ERROR: No .deb packages were found in downloaded artifacts for $GITHUB_REF" >&2
           exit 1
