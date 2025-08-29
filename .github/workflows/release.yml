@@ -463,10 +463,12 @@ jobs:
         echo "DEBUG: Checking downloaded packages..."
         echo "DEBUG: Packages directory contents:"
         ls -la packages/ 2>/dev/null || echo "No packages directory"
-        echo "DEBUG: Noble packages:"
-        ls -la packages/noble-packages/ 2>/dev/null || echo "No noble-packages directory"
-        echo "DEBUG: Jammy packages:"
-        ls -la packages/jammy-packages/ 2>/dev/null || echo "No jammy-packages directory"
+        echo "DEBUG: All subdirectories:"
+        find packages/ -type d 2>/dev/null || echo "No subdirectories found"
+        echo "DEBUG: All .deb files:"
+        find packages/ -name "*.deb" 2>/dev/null || echo "No .deb files found"
+        echo "DEBUG: Pattern search for v0.4.8:"
+        find packages/ -name "*v0.4.8*" 2>/dev/null || echo "No v0.4.8 artifacts found"
 
     - name: Publish apt repo to gh-pages
       env:
