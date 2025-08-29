@@ -15,6 +15,9 @@ override_dh_auto_install:
 	mkdir -p debian/tty-egpf-monitord/run
 	mkdir -p debian/tty-egpf-monitord/var/log/tty-egpf-monitor
 
+override_dh_auto_build:
+	dh_auto_build -- STATIC_BPF=1
+
 override_dh_auto_clean:
 	# Clean build artifacts
 	rm -rf build/

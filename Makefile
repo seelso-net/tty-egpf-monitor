@@ -53,11 +53,20 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 	$(BPFTOOL) gen skeleton $< > $@
 
 # Userspace daemon and CLI
-# Use system libbpf if building for Debian package
-ifdef DEB_BUILD_ARCH
-LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
+# Decide how to link libbpf
+# 1. If STATIC_BPF=1 is set, link libbpf **statically** (preferred for Debian packages
+#    when shipping a custom libbpf that isn't available as a distro package).
+# 2. Else, if we are inside a Debian package build (DEB_BUILD_ARCH is set), rely on
+#    system libbpf shared library so that dpkg-shlibdeps can discover the dependency.
+# 3. Otherwise (local dev build) use whatever is in /usr/local/lib and keep rpath
+#    so the binary finds the custom libbpf shared object at runtime.
+
+ifeq ($(STATIC_BPF),1)
+  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+else ifdef DEB_BUILD_ARCH
+  LIBBPF_LIBS := -lbpf -lelf -lz -lpthread
 else
-LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+  LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
 endif
 
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
