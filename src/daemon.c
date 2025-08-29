@@ -120,6 +120,89 @@ static int check_libbpf_version(void)
     return 0;
 }
 
+// Check if the system has the required libbpf version
+static int check_system_libbpf_version(void)
+{
+    fprintf(stderr, "Checking system libbpf version...\n");
+    
+    // Check what libbpf packages are installed
+    FILE *fp = popen("dpkg -l | grep libbpf", "r");
+    if (fp) {
+        char line[256];
+        fprintf(stderr, "Installed libbpf packages:\n");
+        while (fgets(line, sizeof(line), fp)) {
+            fprintf(stderr, "  %s", line);
+        }
+        pclose(fp);
+    }
+    
+    // Check if we have a compatible version
+    fp = popen("ldconfig -p | grep libbpf", "r");
+    if (fp) {
+        char line[256];
+        fprintf(stderr, "Available libbpf libraries:\n");
+        while (fgets(line, sizeof(line), fp)) {
+            fprintf(stderr, "  %s", line);
+        }
+        pclose(fp);
+    }
+    
+    // Check bpftool version
+    fp = popen("bpftool version 2>/dev/null", "r");
+    if (fp) {
+        char line[256];
+        fprintf(stderr, "bpftool version:\n");
+        while (fgets(line, sizeof(line), fp)) {
+            fprintf(stderr, "  %s", line);
+        }
+        pclose(fp);
+    } else {
+        fprintf(stderr, "WARNING: bpftool not found or not working\n");
+    }
+    
+    return 0;
+}
+
+// Comprehensive runtime compatibility check
+static int check_runtime_compatibility(void)
+{
+    fprintf(stderr, "Checking runtime compatibility...\n");
+    
+    // Check if we can load a simple BPF program
+    struct bpf_object *test_obj = NULL;
+    int err;
+    
+    // Create a minimal test BPF program
+    const char *test_prog = 
+        "SEC(\"tracepoint/syscalls/sys_enter_read\")\n"
+        "int test_prog(struct trace_event_raw_sys_enter *ctx)\n"
+        "{\n"
+        "    return 0;\n"
+        "}\n"
+        "char _license[] SEC(\"license\") = \"GPL\";\n";
+    
+    // Try to create a BPF object from memory
+    test_obj = bpf_object__open_mem("test", strlen(test_prog), test_prog);
+    if (libbpf_get_error(test_obj)) {
+        fprintf(stderr, "ERROR: Failed to create test BPF object: %s\n", strerror(errno));
+        fprintf(stderr, "ERROR: This indicates a serious libbpf compatibility issue\n");
+        return -1;
+    }
+    
+    // Try to load the test object
+    err = bpf_object__load(test_obj);
+    if (err) {
+        fprintf(stderr, "ERROR: Failed to load test BPF object: %d (%s)\n", err, strerror(-err));
+        fprintf(stderr, "ERROR: This indicates libbpf is not compatible with the kernel\n");
+        bpf_object__close(test_obj);
+        return -1;
+    }
+    
+    bpf_object__close(test_obj);
+    fprintf(stderr, "Runtime compatibility check: PASSED\n");
+    return 0;
+}
+
 static void log_event_json(const struct event *e)
 {
     uint32_t idx = e->port_idx;
