@@ -1,4 +1,4 @@
-tty-egpf-monitor (0.4.0-1) unstable; urgency=medium
+tty-egpf-monitor (0.4.1-1) unstable; urgency=medium
 
   * Initial release
   * Advanced serial port monitoring with eBPF technology
