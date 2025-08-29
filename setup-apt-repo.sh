@@ -6,7 +6,7 @@ set -e
 # Configuration
 REPO_ROOT="apt-repo"
 CODENAMES=("jammy" "noble")
-ARCHITECTURES=("amd64")
+ARCHITECTURES=("amd64" "i386")
 COMPONENT="main"
 ORIGIN="TTY EGPF Monitor"
 LABEL="TTY EGPF Monitor APT Repository"
@@ -32,24 +32,33 @@ find . -maxdepth 1 -name "*.deb" -exec cp {} "$REPO_ROOT/pool/$COMPONENT/" \;
 for CODENAME in "${CODENAMES[@]}"; do
     echo "Setting up distribution for $CODENAME..."
     DIST_DIR="$REPO_ROOT/dists/$CODENAME"
-    mkdir -p "$DIST_DIR/$COMPONENT/binary-amd64"
     
-    # Generate Packages file
-    echo "Generating Packages file for $CODENAME..."
-    cd "$REPO_ROOT"
-    dpkg-scanpackages pool/$COMPONENT /dev/null > "dists/$CODENAME/$COMPONENT/binary-amd64/Packages"
-    gzip -9c "dists/$CODENAME/$COMPONENT/binary-amd64/Packages" > "dists/$CODENAME/$COMPONENT/binary-amd64/Packages.gz"
-    cd - > /dev/null
+    # Create directories for all architectures
+    for ARCH in "${ARCHITECTURES[@]}"; do
+        mkdir -p "$DIST_DIR/$COMPONENT/binary-$ARCH"
+    done
     
-    # Create Release file for component
-    cat > "$DIST_DIR/$COMPONENT/Release" << EOF
+    # Generate Packages files for each architecture
+    for ARCH in "${ARCHITECTURES[@]}"; do
+        echo "Generating Packages file for $CODENAME/$ARCH..."
+        cd "$REPO_ROOT"
+        # Filter packages by architecture
+        dpkg-scanpackages -a "$ARCH" pool/$COMPONENT /dev/null > "dists/$CODENAME/$COMPONENT/binary-$ARCH/Packages"
+        gzip -9c "dists/$CODENAME/$COMPONENT/binary-$ARCH/Packages" > "dists/$CODENAME/$COMPONENT/binary-$ARCH/Packages.gz"
+        cd - > /dev/null
+    done
+    
+    # Create Release files for each architecture in component
+    for ARCH in "${ARCHITECTURES[@]}"; do
+        cat > "$DIST_DIR/$COMPONENT/binary-$ARCH/Release" << EOF
 Archive: $CODENAME
 Component: $COMPONENT
 Origin: $ORIGIN
 Label: $LABEL
-Architecture: amd64
+Architecture: $ARCH
 Description: $DESCRIPTION
 EOF
+    done
     
     # Create main Release file
     cat > "$DIST_DIR/Release" << EOF

@@ -11,6 +11,7 @@ NC='\033[0m' # No Color
 
 # Test configurations
 UBUNTU_VERSIONS=("22.04" "24.04")
+ARCHITECTURES=("amd64" "i386")
 TEST_RESULTS=()
 
 echo "🧪 Testing tty-egpf-monitor on multiple Ubuntu versions"
@@ -43,16 +44,30 @@ echo -e "${GREEN}Found package: $LATEST_DEB${NC}"
 TEST_DIR="test-results-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$TEST_DIR"
 
-# Test on each Ubuntu version
+# Test on each Ubuntu version and architecture combination
 for VERSION in "${UBUNTU_VERSIONS[@]}"; do
-    echo -e "\n${YELLOW}Testing on Ubuntu $VERSION...${NC}"
+    for ARCH in "${ARCHITECTURES[@]}"; do
+        echo -e "\n${YELLOW}Testing on Ubuntu $VERSION ($ARCH)...${NC}"
+        
+        # Skip if no package exists for this architecture
+        if ! ls *_${ARCH}.deb >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ No $ARCH package found, skipping${NC}"
+            continue
+        fi
+        
+        CONTAINER_NAME="tty-egpf-test-$VERSION-$ARCH"
+        DOCKERFILE="$TEST_DIR/Dockerfile.$VERSION.$ARCH"
     
-    CONTAINER_NAME="tty-egpf-test-$VERSION"
-    DOCKERFILE="$TEST_DIR/Dockerfile.$VERSION"
-    
-    # Create Dockerfile for this version
-    cat > "$DOCKERFILE" << EOF
-FROM ubuntu:$VERSION
+        # Determine Docker platform
+        if [ "$ARCH" = "i386" ]; then
+            DOCKER_PLATFORM="linux/386"
+        else
+            DOCKER_PLATFORM="linux/$ARCH"
+        fi
+        
+        # Create Dockerfile for this version and architecture
+        cat > "$DOCKERFILE" << EOF
+FROM --platform=$DOCKER_PLATFORM ubuntu:$VERSION
 
 # Install required packages
 RUN apt-get update && \\
@@ -72,11 +87,11 @@ RUN apt-get update && \\
 ENV container docker
 VOLUME ["/sys/fs/cgroup"]
 
-# Copy the .deb file
-COPY $LATEST_DEB /tmp/
+# Copy the architecture-specific .deb file
+COPY *_${ARCH}.deb /tmp/
 
 # Install the package
-RUN dpkg -i /tmp/$LATEST_DEB || apt-get install -f -y
+RUN dpkg -i /tmp/*_${ARCH}.deb || apt-get install -f -y
 
 # Create test script
 RUN echo '#!/bin/bash' > /test.sh && \\
@@ -111,31 +126,32 @@ EOF
 
     # Build and run the test container
     echo "Building container..."
-    if docker build -f "$DOCKERFILE" -t "$CONTAINER_NAME" . > "$TEST_DIR/build-$VERSION.log" 2>&1; then
+    if docker build -f "$DOCKERFILE" -t "$CONTAINER_NAME" . > "$TEST_DIR/build-$VERSION-$ARCH.log" 2>&1; then
         echo "Running tests..."
-        if docker run --rm --privileged "$CONTAINER_NAME" > "$TEST_DIR/test-$VERSION.log" 2>&1; then
-            echo -e "${GREEN}✅ Ubuntu $VERSION: PASSED${NC}"
-            TEST_RESULTS+=("$VERSION: PASSED")
+        if docker run --rm --privileged "$CONTAINER_NAME" > "$TEST_DIR/test-$VERSION-$ARCH.log" 2>&1; then
+            echo -e "${GREEN}✅ Ubuntu $VERSION ($ARCH): PASSED${NC}"
+            TEST_RESULTS+=("$VERSION/$ARCH: PASSED")
             
             # Show key results
             echo "Key results:"
-            grep -A1 "Binary Test" "$TEST_DIR/test-$VERSION.log" | tail -n2 || true
-            grep "cap_" "$TEST_DIR/test-$VERSION.log" || true
+            grep -A1 "Binary Test" "$TEST_DIR/test-$VERSION-$ARCH.log" | tail -n2 || true
+            grep "cap_" "$TEST_DIR/test-$VERSION-$ARCH.log" || true
         else
-            echo -e "${RED}❌ Ubuntu $VERSION: FAILED${NC}"
-            TEST_RESULTS+=("$VERSION: FAILED")
+            echo -e "${RED}❌ Ubuntu $VERSION ($ARCH): FAILED${NC}"
+            TEST_RESULTS+=("$VERSION/$ARCH: FAILED")
             echo "Error output:"
-            tail -20 "$TEST_DIR/test-$VERSION.log"
+            tail -20 "$TEST_DIR/test-$VERSION-$ARCH.log"
         fi
     else
-        echo -e "${RED}❌ Ubuntu $VERSION: BUILD FAILED${NC}"
-        TEST_RESULTS+=("$VERSION: BUILD FAILED")
+        echo -e "${RED}❌ Ubuntu $VERSION ($ARCH): BUILD FAILED${NC}"
+        TEST_RESULTS+=("$VERSION/$ARCH: BUILD FAILED")
         echo "Build error:"
-        tail -20 "$TEST_DIR/build-$VERSION.log"
+        tail -20 "$TEST_DIR/build-$VERSION-$ARCH.log"
     fi
     
     # Clean up
     docker rmi "$CONTAINER_NAME" 2>/dev/null || true
+    done
 done
 
 # Summary

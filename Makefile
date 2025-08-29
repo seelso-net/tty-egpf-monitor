@@ -15,6 +15,10 @@ BPFTOOL ?= $(shell \
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),x86_64)
   BPF_ARCH := x86
+else ifeq ($(UNAME_M),i386)
+  BPF_ARCH := x86
+else ifeq ($(UNAME_M),i686)
+  BPF_ARCH := x86
 else ifeq ($(UNAME_M),aarch64)
   BPF_ARCH := arm64
 else ifeq ($(UNAME_M),arm64)

@@ -4,8 +4,8 @@ This guide details the compatibility requirements and solutions for running tty-
 
 ## Supported Ubuntu Versions
 
-- **Ubuntu 22.04 LTS (Jammy Jellyfish)** ✅
-- **Ubuntu 24.04 LTS (Noble Numbat)** ✅
+- **Ubuntu 22.04 LTS (Jammy Jellyfish)** ✅ (amd64, i386)
+- **Ubuntu 24.04 LTS (Noble Numbat)** ✅ (amd64, i386)
 
 ## Key Differences Between Ubuntu Versions
 
@@ -187,9 +187,11 @@ When adding support for new Ubuntu versions:
 
 ## Support Matrix
 
-| Ubuntu Version | Kernel | libbpf | CAP_BPF | Status |
-|----------------|--------|---------|---------|---------|
-| 22.04 LTS | 5.15 | libbpf0 | ❌ | ✅ Supported |
-| 24.04 LTS | 6.8+ | libbpf1 | ✅ | ✅ Supported |
-| 20.04 LTS | 5.4 | libbpf0 | ❌ | ⚠️ Untested |
-| Future | TBD | TBD | ✅ | 🔄 Planned |
+| Ubuntu Version | Architecture | Kernel | libbpf | CAP_BPF | Status |
+|----------------|--------------|--------|---------|---------|---------|
+| 22.04 LTS | amd64 | 5.15 | libbpf0 | ❌ | ✅ Supported |
+| 22.04 LTS | i386 | 5.15 | libbpf0 | ❌ | ✅ Supported |
+| 24.04 LTS | amd64 | 6.8+ | libbpf1 | ✅ | ✅ Supported |
+| 24.04 LTS | i386 | 6.8+ | libbpf1 | ✅ | ✅ Supported |
+| 20.04 LTS | all | 5.4 | libbpf0 | ❌ | ⚠️ Untested |
+| Future | all | TBD | TBD | ✅ | 🔄 Planned |
