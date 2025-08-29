@@ -6,12 +6,19 @@ on:
       - 'v*'
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-24.04
-    container: ubuntu:24.04
+  build-packages:
+    strategy:
+      matrix:
+        ubuntu-version: ['22.04', '24.04']
+        include:
+          - ubuntu-version: '22.04'
+            codename: 'jammy'
+          - ubuntu-version: '24.04'
+            codename: 'noble'
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.ubuntu-version }}
     permissions:
       contents: write
-      pages: write
     
     steps:
     - name: Checkout code
@@ -46,12 +53,17 @@ jobs:
 
     - name: Install correct libbpf version
       run: |
-        # For noble, ensure we have libbpf1 and remove any libbpf0
-        echo "Ubuntu 24.04 (noble) detected, installing libbpf1 and libbpf-dev"
-        apt-get install -y libbpf1 libbpf-dev
+        # Install the appropriate libbpf version for this Ubuntu release
+        if [ "${{ matrix.ubuntu-version }}" = "22.04" ]; then
+          echo "Ubuntu 22.04 (jammy) detected, installing libbpf0"
+          apt-get install -y libbpf0 libbpf-dev
+        else
+          echo "Ubuntu 24.04 (noble) detected, installing libbpf1"
+          apt-get install -y libbpf1 libbpf-dev
+          # Remove libbpf0 if it exists to ensure we link against libbpf1
+          apt-get remove -y libbpf0 || true
+        fi
         
-        # Remove libbpf0 if it exists to ensure we link against libbpf1
-        apt-get remove -y libbpf0 || true
         apt-get autoremove -y
         
         # Verify pkg-config finds the correct libbpf
@@ -130,17 +142,73 @@ jobs:
 
     - name: Build Debian package
       run: |
-        echo "Building package with flexible libbpf dependency (libbpf0 | libbpf1)"
+        # Use the appropriate control file for this Ubuntu version
+        if [ "${{ matrix.ubuntu-version }}" = "22.04" ]; then
+          echo "Using Jammy control file for Ubuntu 22.04"
+          cp debian/control.jammy debian/control
+        else
+          echo "Using Noble control file for Ubuntu 24.04"
+          cp debian/control.noble debian/control
+        fi
+        
         echo "Final debian/control:"
         cat debian/control
         
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
-    - name: Copy Debian packages to workspace
+    - name: Copy and rename Debian packages
       run: |
-        cp ../*.deb .
+        # Copy packages and rename to include distribution
+        for deb in ../*.deb; do
+          basename=$(basename "$deb" .deb)
+          cp "$deb" "${basename}_${{ matrix.codename }}.deb"
+        done
+        ls -la *.deb
+    
+    - name: Upload packages as artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: packages-${{ matrix.codename }}
+        path: '*_${{ matrix.codename }}.deb'
 
+  publish-release:
+    needs: build-packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: packages
+    
+    - name: List downloaded packages
+      run: |
+        echo "Downloaded packages:"
+        find packages -name "*.deb" -type f | sort
+    
+    - name: Move packages to current directory
+      run: |
+        mv packages/*/*.deb . || true
+        # Remove distribution suffix for pool
+        for deb in *_jammy.deb *_noble.deb; do
+          [ -f "$deb" ] || continue
+          newname=$(echo "$deb" | sed 's/_\(jammy\|noble\)\.deb$/.deb/')
+          mv "$deb" "$newname"
+        done
+        ls -la *.deb
+    
+    - name: Install APT tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apt-utils dpkg-dev gnupg
+    
     - name: Publish apt repo to gh-pages
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
