@@ -167,7 +167,7 @@ jobs:
       if: steps.check_tag.outputs.is_tag == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: noble-packages
+        name: noble-packages-${{ github.ref_name }}
         path: noble-packages/*.deb
 
     - name: Debug - Check if packages were built
@@ -422,7 +422,7 @@ jobs:
       if: steps.check_tag.outputs.is_tag == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: jammy-packages
+        name: jammy-packages-${{ github.ref_name }}
         path: jammy-packages/*.deb
 
     - name: Debug - Check if packages were built
@@ -451,6 +451,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: packages
+        pattern: "*-${{ github.ref_name }}"
 
     - name: Install apt-utils
       run: |
@@ -495,8 +496,8 @@ jobs:
         mkdir -p /tmp/apt-repo/pool/jammy
         
         # Copy packages to their respective pools
-        cp packages/noble-packages/*~noble.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
-        cp packages/jammy-packages/*~jammy.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
+        cp packages/noble-packages-${{ github.ref_name }}/*~noble.deb /tmp/apt-repo/pool/noble/ 2>/dev/null || true
+        cp packages/jammy-packages-${{ github.ref_name }}/*~jammy.deb /tmp/apt-repo/pool/jammy/ 2>/dev/null || true
         
         echo "Packages in noble pool:"
         ls -la /tmp/apt-repo/pool/noble/ 2>/dev/null || echo "No noble packages"
