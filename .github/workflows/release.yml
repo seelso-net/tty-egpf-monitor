@@ -120,6 +120,8 @@ jobs:
     - name: Check if this is a tag release
       id: check_tag
       run: |
+        echo "DEBUG: GITHUB_REF = $GITHUB_REF"
+        echo "DEBUG: GITHUB_EVENT_NAME = $GITHUB_EVENT_NAME"
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           echo "is_tag=true" >> $GITHUB_OUTPUT
           echo "This is a tag release, will build packages"
@@ -359,6 +361,8 @@ jobs:
     - name: Check if this is a tag release
       id: check_tag
       run: |
+        echo "DEBUG: GITHUB_REF = $GITHUB_REF"
+        echo "DEBUG: GITHUB_EVENT_NAME = $GITHUB_EVENT_NAME"
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           echo "is_tag=true" >> $GITHUB_OUTPUT
           echo "This is a tag release, will build packages"
