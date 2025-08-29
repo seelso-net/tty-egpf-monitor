@@ -696,11 +696,17 @@ int main(int argc, char **argv)
         return 1; 
     }
     
+    fprintf(stderr, "BPF skeleton opened successfully\n");
+    
     int load_err = sniffer_bpf__load(g_skel);
     if (load_err) { 
         fprintf(stderr, "load skel failed (err=%d): %s\n", load_err, strerror(-load_err));
+        fprintf(stderr, "This might be due to libbpf version incompatibility or kernel issues\n");
+        sniffer_bpf__destroy(g_skel);
         return 1; 
     }
+    
+    fprintf(stderr, "BPF skeleton loaded successfully\n");
     
     // Ensure exit read tracepoint is enabled for RX capture
     int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
@@ -714,6 +720,8 @@ int main(int argc, char **argv)
     int attach_err = sniffer_bpf__attach(g_skel);
     if (attach_err) { 
         fprintf(stderr, "attach failed (err=%d): %s\n", attach_err, strerror(-attach_err));
+        fprintf(stderr, "This might be due to insufficient permissions or kernel issues\n");
+        sniffer_bpf__destroy(g_skel);
         return 1; 
     }
 
