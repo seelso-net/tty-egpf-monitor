@@ -74,6 +74,12 @@ jobs:
         cd libbpf/src
         make
         
+        # Remove any existing libbpf installations to avoid conflicts
+        echo "Removing existing libbpf installations..."
+        rm -f /usr/local/lib/libbpf.so* /usr/local/lib64/libbpf.so* /usr/local/lib/libbpf.a /usr/local/lib64/libbpf.a 2>/dev/null || true
+        rm -rf /usr/local/include/bpf 2>/dev/null || true
+        rm -f /usr/local/lib/pkgconfig/libbpf.pc /usr/local/lib64/pkgconfig/libbpf.pc 2>/dev/null || true
+        
         # Install with explicit paths to ensure proper installation
         make install PREFIX=/usr/local
         ldconfig
@@ -156,7 +162,7 @@ jobs:
         }
         EOF
         
-        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib -lbpf -Wl,-rpath,/usr/local/lib
+        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib64 -lbpf -Wl,-rpath,/usr/local/lib64
         /tmp/test_libbpf
         rm -f /tmp/test_libbpf /tmp/test_libbpf.c
 
@@ -337,6 +343,12 @@ jobs:
         cd libbpf/src
         make
         
+        # Remove any existing libbpf installations to avoid conflicts
+        echo "Removing existing libbpf installations..."
+        rm -f /usr/local/lib/libbpf.so* /usr/local/lib64/libbpf.so* /usr/local/lib/libbpf.a /usr/local/lib64/libbpf.a 2>/dev/null || true
+        rm -rf /usr/local/include/bpf 2>/dev/null || true
+        rm -f /usr/local/lib/pkgconfig/libbpf.pc /usr/local/lib64/pkgconfig/libbpf.pc 2>/dev/null || true
+        
         # Install with explicit paths to ensure proper installation
         make install PREFIX=/usr/local
         ldconfig
@@ -419,7 +431,7 @@ jobs:
         }
         EOF
         
-        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib -lbpf -Wl,-rpath,/usr/local/lib
+        gcc -o /tmp/test_libbpf /tmp/test_libbpf.c -L/usr/local/lib64 -lbpf -Wl,-rpath,/usr/local/lib64
         /tmp/test_libbpf
         rm -f /tmp/test_libbpf /tmp/test_libbpf.c
 
