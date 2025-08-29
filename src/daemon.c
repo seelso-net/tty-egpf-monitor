@@ -56,6 +56,7 @@ static void on_sig(int s){ (void)s; stop_flag = 1; }
 
 struct ring_buffer *g_rb;
 struct sniffer_bpf *g_skel;
+struct bpf_object *g_obj;
 
 static pthread_mutex_t ports_mu = PTHREAD_MUTEX_INITIALIZER;
 static char ports[MAX_PORTS][256];
