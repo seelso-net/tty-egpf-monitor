@@ -1,22 +1,22 @@
 Architectures: amd64
 Codename: jammy
 Components: main
-Date: Fri, 29 Aug 2025 19:50:12 +0000
+Date: Fri, 29 Aug 2025 20:00:07 +0000
 Label: tty-egpf-monitor
 Suite: jammy
 MD5Sum:
- 246ef8afebfcb4f301bd7038d66302db              129 Release
+ 19f49188bbd13473afb46a161a060f28              129 Release
  41fe08f02e88c2f091c330b4bf23379c             2078 main/binary-amd64/Packages
- b7e169d563ac7faabcc86d339c054fd6             1122 main/binary-amd64/Packages.gz
+ d8555b9d15f55900deb2d212a91e4c32             1122 main/binary-amd64/Packages.gz
 SHA1:
- e921484647f3c82af1a93ab0d2e1757937917fcd              129 Release
+ 415362e6f5a1e5cb7fc06bd1a7979daa8d229f83              129 Release
  79e808f90db0efa36c824ae3ee5b66ba7bd89f4c             2078 main/binary-amd64/Packages
- 8f14137a3eb62207570907f6243bf1ee4a7c5ac5             1122 main/binary-amd64/Packages.gz
+ 740ff1c2b487d31ee012d064947eea174f27f630             1122 main/binary-amd64/Packages.gz
 SHA256:
- a648c60c471112b8f22840fbaecda4d140f878ee001e2e07ff7964b6a7e6be24              129 Release
+ 2cfa81a8412cbd9ec658328d1f0d94997b7832de9e1031773131385b4945e002              129 Release
  d3586ff2fea0a5a3f59a662b0c5e0f06c7ea28acc1d05801777709a642d255e7             2078 main/binary-amd64/Packages
- 1942547f91d48d95aa27f45fa5fdbc692bbfe68240df85c0380affb3e6275a6e             1122 main/binary-amd64/Packages.gz
+ 03e2c07ccc219f9eb57a818ad05b8f5cb171d0f4c1941ef2fdf0214a00ab2612             1122 main/binary-amd64/Packages.gz
 SHA512:
- 7465bea1e936261432e0c9a6c76225597a01b120212d2753a6655401fc19b019a52a8cde2478dfdf5c7b1bb516461f5d6a23230676ebcbd7c67fa644510e30eb              129 Release
+ 4cd217cd24131927f07029af9402a77bdc174a4e5961269035423652fd4df6d0a8194b11d3d8721c61851dd3c34ad91494b86db2b654096ab6c60ee9f041d9ef              129 Release
  be77b924b3b5ebf7f773b1f67b5e2af543398b5fde11a781e4947e39c7937b04d93f0b4a41b9bbb9f8efa7d72fb4149d42f81b2000836f9919204cfc2be98784             2078 main/binary-amd64/Packages
- 22a393c35470d494934a511579b9061e970d45456226572dca35168939871ca287af721386e1c35044e566e922e7cc2fa02717d1535fbd70a692eb07fc00cb10             1122 main/binary-amd64/Packages.gz
+ 9e567d05d5b102ec6ca7c40eb1df948a23f9727ad1d6abbab09d902c7e093258928fcfc7ba577713c0809157115cfca5f8e6069528bae1a4ee0072e80774d433             1122 main/binary-amd64/Packages.gz
