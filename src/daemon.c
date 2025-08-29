@@ -73,9 +73,33 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx);
 // Check libbpf version compatibility
 static int check_libbpf_version(void)
 {
-    unsigned int major = libbpf_major_version();
-    unsigned int minor = libbpf_minor_version();
-    const char *version_str = libbpf_version_string();
+    /*
+     * libbpf 1.0 introduced runtime helper functions
+     *   libbpf_major_version(), libbpf_minor_version(),
+     *   libbpf_version_string().
+     * These helpers don’t exist in older releases that are still
+     * shipped on Ubuntu 22.04 (libbpf 0.5).
+     *
+     * Linking against those missing symbols breaks package builds on
+     * jammy.  Instead of calling the helpers, rely on compile-time
+     * macros provided by <bpf/libbpf_version.h>.  They expand to the
+     * version of the *headers* that are being used to compile the
+     * project which is good enough for a coarse compatibility check.
+     */
+
+#ifdef LIBBPF_MAJOR_VERSION
+    unsigned int major = LIBBPF_MAJOR_VERSION;
+#else
+    unsigned int major = 0;
+#endif
+
+#ifdef LIBBPF_MINOR_VERSION
+    unsigned int minor = LIBBPF_MINOR_VERSION;
+#else
+    unsigned int minor = 0;
+#endif
+
+    const char *version_str = "(compile-time)";
     
     fprintf(stderr, "libbpf version: %u.%u (%s)\n", major, minor, version_str);
     
