@@ -170,6 +170,15 @@ jobs:
         name: noble-packages
         path: noble-packages/*.deb
 
+    - name: Debug - Check if packages were built
+      run: |
+        echo "DEBUG: Checking if packages were built..."
+        echo "DEBUG: Current directory: $(pwd)"
+        echo "DEBUG: Noble packages directory:"
+        ls -la noble-packages/ 2>/dev/null || echo "No noble-packages directory"
+        echo "DEBUG: Parent directory .deb files:"
+        ls -la ../*.deb 2>/dev/null || echo "No .deb files in parent directory"
+
   # Build for Ubuntu 22.04 (jammy) - new job
   build-jammy:
     runs-on: ubuntu-latest
@@ -415,6 +424,15 @@ jobs:
       with:
         name: jammy-packages
         path: jammy-packages/*.deb
+
+    - name: Debug - Check if packages were built
+      run: |
+        echo "DEBUG: Checking if packages were built..."
+        echo "DEBUG: Current directory: $(pwd)"
+        echo "DEBUG: Jammy packages directory:"
+        ls -la jammy-packages/ 2>/dev/null || echo "No jammy-packages directory"
+        echo "DEBUG: Parent directory .deb files:"
+        ls -la ../*.deb 2>/dev/null || echo "No .deb files in parent directory"
 
   # Publish apt repository - modified to handle both packages
   publish-apt-repo:
