@@ -75,47 +75,46 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx);
 static int check_libbpf_version(void)
 {
     /*
-     * libbpf 1.0 introduced runtime helper functions
-     *   libbpf_major_version(), libbpf_minor_version(),
-     *   libbpf_version_string().
-     * These helpers don’t exist in older releases that are still
-     * shipped on Ubuntu 22.04 (libbpf 0.5).
-     *
-     * Linking against those missing symbols breaks package builds on
-     * jammy.  Instead of calling the helpers, rely on compile-time
-     * macros provided by <bpf/libbpf_version.h>.  They expand to the
-     * version of the *headers* that are being used to compile the
-     * project which is good enough for a coarse compatibility check.
+     * Prefer exact runtime version if helpers are available (libbpf >= 1.0):
+     *   libbpf_major_version(), libbpf_minor_version(), libbpf_version_string().
+     * Fallback to compile-time macros when building against older libbpf (e.g., 0.5 on jammy).
+     * Use weak references so linking succeeds even if symbols are absent.
      */
 
-#ifdef LIBBPF_MAJOR_VERSION
-    unsigned int major = LIBBPF_MAJOR_VERSION;
-#else
+    extern const char *libbpf_version_string(void) __attribute__((weak));
+    extern unsigned int libbpf_major_version(void) __attribute__((weak));
+    extern unsigned int libbpf_minor_version(void) __attribute__((weak));
+
     unsigned int major = 0;
-#endif
-
-#ifdef LIBBPF_MINOR_VERSION
-    unsigned int minor = LIBBPF_MINOR_VERSION;
-#else
     unsigned int minor = 0;
-#endif
+    const char *how = "compile-time";
+    const char *version_str = NULL;
 
-    const char *version_str = "(compile-time)";
-    
-    fprintf(stderr, "libbpf version: %u.%u (%s)\n", major, minor, version_str);
-    
-    // Check if version is compatible (need at least 0.8.0 for proper skeleton support)
+    if (libbpf_version_string && libbpf_major_version && libbpf_minor_version) {
+        major = libbpf_major_version();
+        minor = libbpf_minor_version();
+        version_str = libbpf_version_string();
+        how = "runtime";
+    } else {
+#ifdef LIBBPF_MAJOR_VERSION
+        major = LIBBPF_MAJOR_VERSION;
+#endif
+#ifdef LIBBPF_MINOR_VERSION
+        minor = LIBBPF_MINOR_VERSION;
+#endif
+        version_str = "n/a";
+    }
+
+    fprintf(stderr, "libbpf version: %u.%u (%s: %s)\n", major, minor, how, version_str ? version_str : "n/a");
+
+    // Require at least 0.8.0 for reliable skeleton support
     if (major == 0 && minor < 8) {
         fprintf(stderr, "ERROR: libbpf version %u.%u is not compatible\n", major, minor);
         fprintf(stderr, "ERROR: This version has known issues with BPF skeleton attachment\n");
         fprintf(stderr, "ERROR: Please upgrade to libbpf 0.8.0 or newer\n");
-        fprintf(stderr, "ERROR: On Ubuntu 22.04, you can install a newer version with:\n");
-        fprintf(stderr, "ERROR:   sudo apt-get install -y git build-essential libelf-dev zlib1g-dev\n");
-        fprintf(stderr, "ERROR:   cd /tmp && git clone --depth 1 https://github.com/libbpf/libbpf.git\n");
-        fprintf(stderr, "ERROR:   cd libbpf/src && sudo make install && sudo ldconfig\n");
         return -1;
     }
-    
+
     fprintf(stderr, "libbpf version check: PASSED\n");
     return 0;
 }
