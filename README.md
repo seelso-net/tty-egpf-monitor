@@ -36,42 +36,53 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 
 ## 📦 Installation
 
-### Install via apt (GitHub-backed repo)
-We publish .deb packages and an apt repository on the `gh-pages` branch. After a tagged release (e.g., `v1.2.3`), CI builds and updates the repo automatically.
+### 🚀 Quick Install (Recommended)
 
-### Ubuntu Version Compatibility
+For Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble):
 
-This package is designed to work on multiple Ubuntu versions:
-
-- **Ubuntu 24.04 (Noble)**: Native support with libbpf1
-- **Ubuntu 22.04 (Jammy)**: Enhanced compatibility with libbpf version checking
-
-For Ubuntu 22.04, the daemon automatically checks the libbpf version and provides clear error messages if an incompatible version is detected. This ensures reliable eBPF functionality with clear guidance for users.
-
-1) Install repository public key and add the apt source:
 ```bash
+# Add repository and install
 CODENAME=$(lsb_release -cs)
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
-sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.gpg) /usr/share/keyrings/tty-egpf-monitor.gpg
+sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.asc) /usr/share/keyrings/tty-egpf-monitor.gpg
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
-```
-
-**Note**: The repository provides packages for different Ubuntu versions:
-- `jammy` (Ubuntu 22.04 LTS)
-- `noble` (Ubuntu 24.04 LTS)
-
-The installation script automatically detects your Ubuntu version and uses the appropriate repository.
-
-The repository is signed. If you prefer to skip verification temporarily, you may replace `signed-by=...` with `trusted=yes` (not recommended).
-
-2) Install packages:
-```bash
 sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
 sudo systemctl enable --now tty-egpf-monitord
 ```
 
-Defaults:
+### 📋 Detailed Installation Guide
+
+For complete installation instructions, troubleshooting, and advanced configuration, see **[INSTALLATION.md](INSTALLATION.md)**.
+
+### 🔧 Manual Build
+
+If you prefer to build from source:
+
+```bash
+# Install dependencies
+sudo apt-get install -y build-essential clang make libelf-dev zlib1g-dev pkg-config \
+    linux-headers-generic libbpf-dev bpftool libsystemd-dev git
+
+# Build and install
+git clone https://github.com/seelso-net/tty-egpf-monitor.git
+cd tty-egpf-monitor
+make
+sudo make install
+```
+
+### 🐳 Docker Support
+
+For containerized environments, see the [Docker section in INSTALLATION.md](INSTALLATION.md#docker-installation).
+
+### 📦 Package Information
+
+- **Repository**: GitHub Pages-hosted APT repository
+- **Signing**: GPG-signed packages for security
+- **Supported**: Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble)
+- **Architecture**: x86_64 (amd64)
+
+**Defaults**:
 - Socket: `/run/tty-egpf-monitord.sock`
 - Logs dir: `/var/log/tty-egpf-monitor`
 
