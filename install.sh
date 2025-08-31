@@ -74,9 +74,18 @@ KEY_FILE="/usr/share/keyrings/tty-egpf-monitor.gpg"
 
 # Download and install the repository key
 print_status "Adding repository key..."
-if ! sudo install -m 0644 <(curl -fsSL "$KEY_URL") "$KEY_FILE"; then
-    print_error "Failed to download repository key from $KEY_URL"
-    exit 1
+if command -v gpg &> /dev/null; then
+    if ! curl -fsSL "$KEY_URL" | sudo gpg --dearmor -o "$KEY_FILE"; then
+        print_error "Failed to download repository key from $KEY_URL"
+        exit 1
+    fi
+else
+    # Fallback: download directly if gpg is not available
+    if ! sudo curl -fsSL "$KEY_URL" -o "$KEY_FILE"; then
+        print_error "Failed to download repository key from $KEY_URL"
+        exit 1
+    fi
+    sudo chmod 644 "$KEY_FILE"
 fi
 
 # Add the repository

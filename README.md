@@ -38,8 +38,12 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 
 ### 🚀 Quick Install (Recommended)
 
-For Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble):
+**Option 1: One-command installation script**
+```bash
+curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install.sh | bash
+```
 
+**Option 2: Manual installation**
 ```bash
 # Add repository and install
 CODENAME=$(lsb_release -cs)
