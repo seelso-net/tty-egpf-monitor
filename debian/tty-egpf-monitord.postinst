@@ -2,75 +2,13 @@
 set -e
 
 # Post-installation script for tty-egpf-monitord
-# This script ensures that libbpf 1.7.0 is available at runtime
+# Note: libbpf is statically linked in Debian packages; no runtime libbpf install needed
 
 case "$1" in
     configure)
         echo "Configuring tty-egpf-monitord..."
         
-        # Check if we have a compatible libbpf version
-        if command -v pkg-config >/dev/null 2>&1; then
-            LIBBPF_VERSION=$(pkg-config --modversion libbpf 2>/dev/null || echo "unknown")
-            echo "Current libbpf version: $LIBBPF_VERSION"
-            
-            # Check if we need to build libbpf 1.6.2
-            NEED_LIBBPF_162=false
-            
-            if [ "$LIBBPF_VERSION" = "unknown" ]; then
-                echo "No libbpf found via pkg-config, will build 1.6.2"
-                NEED_LIBBPF_162=true
-            else
-                # Parse version and check if it's >= 1.6.2
-                MAJOR=$(echo "$LIBBPF_VERSION" | cut -d. -f1)
-                MINOR=$(echo "$LIBBPF_VERSION" | cut -d. -f2)
-                
-                if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 6 ]); then
-                    echo "libbpf version $LIBBPF_VERSION is too old, need 1.6.2 or newer"
-                    NEED_LIBBPF_162=true
-                else
-                    echo "libbpf version $LIBBPF_VERSION is compatible"
-                fi
-            fi
-            
-            if [ "$NEED_LIBBPF_162" = "true" ]; then
-                echo "Building libbpf 1.6.2..."
-                
-                # Check if dpkg is locked
-                if [ -f /var/lib/dpkg/lock-frontend ] || [ -f /var/lib/dpkg/lock ]; then
-                    echo "WARNING: dpkg is locked, skipping automatic libbpf installation"
-                    echo "WARNING: Please run manually:"
-                    echo "WARNING:   sudo apt-get update"
-                    echo "WARNING:   sudo apt-get install -y build-essential git libelf-dev zlib1g-dev pkg-config"
-                    echo "WARNING:   cd /tmp && git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git"
-                    echo "WARNING:   cd libbpf/src && sudo make install && sudo ldconfig"
-                    return 0
-                fi
-                
-                # Install build dependencies
-                apt-get update
-                apt-get install -y --no-install-recommends \
-                    build-essential \
-                    git \
-                    libelf-dev \
-                    zlib1g-dev \
-                    pkg-config
-                
-                # Build and install libbpf 1.6.2
-                cd /tmp
-                git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
-                cd libbpf/src
-                make && make install
-                ldconfig
-                
-                # Clean up
-                cd /
-                rm -rf /tmp/libbpf
-                
-                echo "libbpf 1.6.2 installed successfully"
-            fi
-        else
-            echo "pkg-config not available, assuming libbpf is compatible"
-        fi
+        echo "libbpf runtime: skipped (statically linked)"
         
         # Create systemd service user if it doesn't exist
         if ! getent passwd tty-egpf-monitor >/dev/null 2>&1; then
