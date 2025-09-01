@@ -34,6 +34,12 @@ struct fdkey { uint32_t tgid; int32_t fd; };
 #define MAX_PORTS 16
 #define MAX_PATH 256
 struct pathval { char path[MAX_PATH]; };
+
+/* Additional structs needed for BPF scratch buffers */
+struct read_ctx { int32_t fd; const void *buf; size_t count; };
+struct open_ctx { const char *filename; };
+struct close_ctx { int32_t fd; };
+
 #define DEFAULT_HTTP_PORT 12768
 #define CONFIG_FILE "/var/log/tty-egpf-monitor/daemon.conf"
 #define DEFAULT_SOCKET_PATH "/run/tty-egpf-monitord.sock"
@@ -822,6 +828,29 @@ int main(int argc, char **argv)
     }
     
     fprintf(stderr, "BPF skeleton loaded successfully\n");
+    
+    // Initialize scratch buffers - these are required for the BPF program to function
+    // The BPF program uses these as temporary storage and will fail if they're empty
+    uint32_t k0 = 0;
+    struct pathval empty_path = { .path = "" };
+    struct read_ctx empty_read = { .fd = 0, .buf = NULL, .count = 0 };
+    struct open_ctx empty_open = { .filename = NULL };
+    struct close_ctx empty_close = { .fd = 0 };
+    
+    // Initialize all scratch buffers with empty structures
+    int scratch1_fd = bpf_map__fd(g_skel->maps.scratch1);
+    int scratch2_fd = bpf_map__fd(g_skel->maps.scratch2);
+    int scratch3_fd = bpf_map__fd(g_skel->maps.scratch3);
+    int scratch4_fd = bpf_map__fd(g_skel->maps.scratch4);
+    int scratch5_fd = bpf_map__fd(g_skel->maps.scratch5);
+    
+    if (scratch1_fd >= 0) bpf_map_update_elem(scratch1_fd, &k0, &empty_path, BPF_ANY);
+    if (scratch2_fd >= 0) bpf_map_update_elem(scratch2_fd, &k0, &empty_path, BPF_ANY);
+    if (scratch3_fd >= 0) bpf_map_update_elem(scratch3_fd, &k0, &empty_read, BPF_ANY);
+    if (scratch4_fd >= 0) bpf_map_update_elem(scratch4_fd, &k0, &empty_open, BPF_ANY);
+    if (scratch5_fd >= 0) bpf_map_update_elem(scratch5_fd, &k0, &empty_close, BPF_ANY);
+    
+    fprintf(stderr, "Scratch buffers initialized\n");
     
     // Ensure exit read tracepoint is enabled for RX capture
     int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
