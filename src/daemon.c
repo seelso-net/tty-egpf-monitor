@@ -246,7 +246,11 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     }
     // Store the log path for later reopening
     snprintf(log_paths[idx], sizeof(log_paths[idx]), "%s", use_log);
-    FILE *f = fopen(use_log, "a");
+    // Ensure relative paths are placed under the configured log directory
+    char abs_log_path[1024];
+    if (use_log[0] == '/') snprintf(abs_log_path, sizeof(abs_log_path), "%s", use_log);
+    else snprintf(abs_log_path, sizeof(abs_log_path), "%s/%s", g_log_dir, use_log);
+    FILE *f = fopen(abs_log_path, "a");
     if (!f) { snprintf(err, errsz, "log open: %s", strerror(errno)); ports[idx][0]='\0'; pthread_mutex_unlock(&ports_mu); return -1; }
     port_logs[idx] = f;
     target_count++;
@@ -350,13 +354,16 @@ static void reopen_existing_logs(void)
         fprintf(stderr, "DEBUG: Checking port[%u]='%s', log_paths[%u]='%s', port_logs[%u]=%p\n", 
                 i, ports[i], i, log_paths[i], i, port_logs[i]);
         if (ports[i][0] != '\0' && !port_logs[i]) {
-            // Reopen log file for this port
-            FILE *f = fopen(log_paths[i], "a");
+            // Reopen log file for this port (prefix relative paths with log dir)
+            char abs_log_path[1024];
+            if (log_paths[i][0] == '/') snprintf(abs_log_path, sizeof(abs_log_path), "%s", log_paths[i]);
+            else snprintf(abs_log_path, sizeof(abs_log_path), "%s/%s", g_log_dir, log_paths[i]);
+            FILE *f = fopen(abs_log_path, "a");
             if (f) {
                 port_logs[i] = f;
-                fprintf(stderr, "DEBUG: Reopened log file for port %s\n", ports[i]);
+                fprintf(stderr, "DEBUG: Reopened log file for port %s -> %s\n", ports[i], abs_log_path);
             } else {
-                fprintf(stderr, "DEBUG: Failed to reopen log file for port %s: %s\n", ports[i], strerror(errno));
+                fprintf(stderr, "DEBUG: Failed to reopen log file for port %s (%s): %s\n", ports[i], abs_log_path, strerror(errno));
             }
         }
     }
@@ -487,7 +494,7 @@ static void handle_http_client(int cfd)
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
 
         /* Copy log path under lock, then read using a separate handle */
-        char logpath_local[512] = {0};
+        char logpath_local[1024] = {0};
         pthread_mutex_lock(&ports_mu);
         if (log_paths[idx][0] != '\0') {
             snprintf(logpath_local, sizeof(logpath_local), "%s", log_paths[idx]);
@@ -502,7 +509,12 @@ static void handle_http_client(int cfd)
             http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; 
         }
 
-        FILE *rf = fopen(logpath_local, "r");
+        // Prefix relative paths with log dir
+        char abs_log_path[1024];
+        if (logpath_local[0] == '/') snprintf(abs_log_path, sizeof(abs_log_path), "%s", logpath_local);
+        else snprintf(abs_log_path, sizeof(abs_log_path), "%s/%s", g_log_dir, logpath_local);
+
+        FILE *rf = fopen(abs_log_path, "r");
         if (!rf) { 
             http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; 
         }
@@ -528,7 +540,7 @@ static void handle_http_client(int cfd)
         if (*p >= '0' && *p <= '9') { idx = atoi(p); }
         if (idx < 0 || idx >= (int)MAX_PORTS) { http_send(cfd, 400, "text/plain", "bad index"); close(cfd); return; }
 
-        char logpath_local[512] = {0};
+        char logpath_local[1024] = {0};
         pthread_mutex_lock(&ports_mu);
         if (log_paths[idx][0] != '\0') {
             snprintf(logpath_local, sizeof(logpath_local), "%s", log_paths[idx]);
@@ -540,7 +552,12 @@ static void handle_http_client(int cfd)
         pthread_mutex_unlock(&ports_mu);
         if (!logpath_local[0]) { http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
 
-        FILE *rf = fopen(logpath_local, "r");
+        // Prefix relative paths with log dir
+        char abs_log_path2[1024];
+        if (logpath_local[0] == '/') snprintf(abs_log_path2, sizeof(abs_log_path2), "%s", logpath_local);
+        else snprintf(abs_log_path2, sizeof(abs_log_path2), "%s/%s", g_log_dir, logpath_local);
+
+        FILE *rf = fopen(abs_log_path2, "r");
         if (!rf) { http_send(cfd, 404, "text/plain", "no log"); close(cfd); return; }
         int rfd = fileno(rf);
         off_t cur = lseek(rfd, 0, SEEK_END);
