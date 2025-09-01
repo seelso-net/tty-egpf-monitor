@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <limits.h>
 // #include <systemd/sd-daemon.h>  // Commented out for Ubuntu 22.04 compatibility
 
 #include <bpf/libbpf.h>
@@ -70,6 +71,18 @@ static char g_log_dir[256] = DEFAULT_LOG_DIR;
 static void save_config(void);
 static void load_config(void);
 static void scan_existing_fds(const char *devpath, uint32_t port_idx);
+
+static void normalize_path(const char *input_path, char *output_path, size_t output_size)
+{
+    char resolved[PATH_MAX];
+    if (input_path && realpath(input_path, resolved)) {
+        snprintf(output_path, output_size, "%s", resolved);
+    } else if (input_path) {
+        snprintf(output_path, output_size, "%s", input_path);
+    } else if (output_size) {
+        output_path[0] = '\0';
+    }
+}
 
 // Check libbpf version compatibility
 static int check_libbpf_version(void)
@@ -235,7 +248,7 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     pthread_mutex_lock(&ports_mu);
     uint32_t idx = target_count;
     if (idx >= MAX_PORTS) { snprintf(err, errsz, "max ports reached"); pthread_mutex_unlock(&ports_mu); return -1; }
-    snprintf(ports[idx], sizeof(ports[idx]), "%s", devpath);
+    normalize_path(devpath, ports[idx], sizeof(ports[idx]));
     char pathbuf[512];
     const char *use_log = logpath && logpath[0] ? logpath : NULL;
     if (!use_log) {
@@ -302,8 +315,8 @@ static void load_config(void)
         } else if (strncmp(line, "port[", 5) == 0) {
             int idx;
             char path[256];
-            if (sscanf(line, "port[%d]=%s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
-                snprintf(ports[idx], sizeof(ports[idx]), "%s", path);
+            if (sscanf(line, "port[%d]=%255s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
+                normalize_path(path, ports[idx], sizeof(ports[idx]));
                 fprintf(stderr, "DEBUG: Loaded port[%d]=%s\n", idx, ports[idx]);
             }
         } else if (strncmp(line, "log_path[", 9) == 0) {
@@ -400,11 +413,15 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
             if (!isdigit(fd_entry->d_name[0])) continue;
             
             snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
-            char target[256];
+            char target[PATH_MAX];
             ssize_t len = readlink(link_path, target, sizeof(target) - 1);
             if (len > 0) {
                 target[len] = '\0';
-                if (strcmp(target, devpath) == 0) {
+                char norm_target[PATH_MAX];
+                char norm_dev[PATH_MAX];
+                normalize_path(target, norm_target, sizeof(norm_target));
+                normalize_path(devpath, norm_dev, sizeof(norm_dev));
+                if (strcmp(norm_target, norm_dev) == 0) {
                     // Found a match! Update BPF maps
                     int fd = atoi(fd_entry->d_name);
                     struct fdkey k = { .tgid = tgid, .fd = fd };
