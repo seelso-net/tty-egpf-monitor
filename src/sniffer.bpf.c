@@ -187,6 +187,7 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
+            bpf_printk("open-enter raw: tgid=%u match idx=%u\n", tgid, midx);
             bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         }
         return 0;
@@ -297,6 +298,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
                 if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+                bpf_printk("open-exit raw: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         } else {
@@ -375,6 +377,7 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     }
     if (matched_idx >= 0) {
         __u32 midx = (unsigned)matched_idx;
+        bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
     }
     return 0;
@@ -428,6 +431,7 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+    bpf_printk("open-exit tp: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
