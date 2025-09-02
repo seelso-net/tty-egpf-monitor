@@ -79,6 +79,27 @@ static void save_config(void);
 static void load_config(void);
 static void scan_existing_fds(const char *devpath, uint32_t port_idx);
 
+static void write_info_line(uint32_t idx)
+{
+    if (idx >= MAX_PORTS || !port_logs[idx] || ports[idx][0] == '\0') return;
+    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
+    int baud = -1;
+    char cmd[512]; snprintf(cmd, sizeof(cmd), "stty -F %s -a 2>/dev/null", ports[idx]);
+    FILE *pf = popen(cmd, "r");
+    if (pf) {
+        char line[1024];
+        if (fgets(line, sizeof(line), pf)) {
+            const char *sp = strstr(line, "speed ");
+            if (sp) { sp += 6; baud = atoi(sp); }
+        }
+        pclose(pf);
+    }
+    fprintf(port_logs[idx],
+            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"passive\",\"baud\":%d}\n",
+            (uint64_t)ts.tv_sec, ts.tv_nsec, ports[idx], baud);
+    fflush(port_logs[idx]);
+}
+
 static void normalize_path(const char *input_path, char *output_path, size_t output_size)
 {
     char resolved[PATH_MAX];
@@ -275,6 +296,7 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     port_logs[idx] = f;
     target_count++;
     int rc = sync_targets_map();
+    write_info_line(idx);
     pthread_mutex_unlock(&ports_mu);
     if (rc) { snprintf(err, errsz, "sync map failed"); return -1; }
     
@@ -382,29 +404,7 @@ static void reopen_existing_logs(void)
             if (f) {
                 port_logs[i] = f;
                 fprintf(stderr, "DEBUG: Reopened log file for port %s -> %s\n", ports[i], abs_log_path);
-                // Write an informational line so logs are never empty
-                struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-                // Try to detect current baud using stty; fall back to -1
-                int baud = -1;
-                {
-                    char cmd[512]; snprintf(cmd, sizeof(cmd), "stty -F %s -a 2>/dev/null", ports[i]);
-                    FILE *pf = popen(cmd, "r");
-                    if (pf) {
-                        char line[1024];
-                        if (fgets(line, sizeof(line), pf)) {
-                            const char *sp = strstr(line, "speed ");
-                            if (sp) {
-                                sp += 6; // after 'speed '
-                                baud = atoi(sp);
-                            }
-                        }
-                        pclose(pf);
-                    }
-                }
-                fprintf(port_logs[i],
-                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"passive\",\"baud\":%d}\n",
-                        (uint64_t)ts.tv_sec, ts.tv_nsec, ports[i], baud);
-                fflush(port_logs[i]);
+                write_info_line(i);
             } else {
                 fprintf(stderr, "DEBUG: Failed to reopen log file for port %s (%s): %s\n", ports[i], abs_log_path, strerror(errno));
             }

@@ -38,6 +38,12 @@ typedef long long          __s64;
 #ifndef __NR_openat2
 #define __NR_openat2 437
 #endif
+#ifndef __NR_readv
+#define __NR_readv  19
+#endif
+#ifndef __NR_writev
+#define __NR_writev 20
+#endif
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -70,6 +76,9 @@ struct event {
     __u32 data_len, data_trunc;
     __u8  data[MAX_DATA];
 };
+
+/* Minimal iovec for readv/writev handling */
+struct __iovec { void *iov_base; size_t iov_len; };
 
 /* Ringbuf for user-space */
 struct { __uint(type, BPF_MAP_TYPE_RINGBUF); __uint(max_entries, 1<<24); } events SEC(".maps");
@@ -180,6 +189,27 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         return 0;
     }
 
+    if (id == __NR_writev) {
+        __s32 fd; const struct __iovec *iov; unsigned long vcnt;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        bpf_probe_read_kernel(&iov, sizeof(iov), &ctx->args[1]);
+        bpf_probe_read_kernel(&vcnt, sizeof(vcnt), &ctx->args[2]);
+        struct fdkey k = { .tgid = tgid, .fd = fd };
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+        if (!idxp || !iov || vcnt == 0) return 0;
+        struct __iovec first = {};
+        bpf_probe_read_user(&first, sizeof(first), iov);
+        size_t cap = first.iov_len > MAX_DATA ? MAX_DATA : first.iov_len;
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) return 0;
+        fill_common(e, EV_WRITE);
+        e->dir = 1; e->ret = 0; e->cmd = 0; e->port_idx = *idxp;
+        e->data_len = cap; e->data_trunc = first.iov_len > MAX_DATA ? (first.iov_len - MAX_DATA) : 0;
+        if (cap && first.iov_base) bpf_probe_read_user(e->data, cap, first.iov_base);
+        bpf_ringbuf_submit(e, 0);
+        return 0;
+    }
+
     if (id == __NR_read) {
         __s32 fd; const void __user *buf; size_t count;
         bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
@@ -189,6 +219,22 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct read_ctx *rc = bpf_map_lookup_elem(&scratch3, &k0);
         if (!rc) return 0;
         rc->fd = fd; rc->buf = buf; rc->count = count;
+        bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
+        return 0;
+    }
+
+    if (id == __NR_readv) {
+        __s32 fd; const struct __iovec *iov; unsigned long vcnt;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        bpf_probe_read_kernel(&iov, sizeof(iov), &ctx->args[1]);
+        bpf_probe_read_kernel(&vcnt, sizeof(vcnt), &ctx->args[2]);
+        __u32 k0 = 0;
+        struct read_ctx *rc = bpf_map_lookup_elem(&scratch3, &k0);
+        if (!rc || !iov || vcnt == 0) return 0;
+        struct __iovec first = {};
+        bpf_probe_read_user(&first, sizeof(first), iov);
+        rc->fd = fd; rc->buf = first.iov_base; rc->count = first.iov_len;
+        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
         bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
         return 0;
     }
@@ -254,6 +300,25 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     }
 
     if (id == __NR_read) {
+        struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &tgid);
+        if (!rc) return 0;
+        struct fdkey k; k.tgid = tgid; k.fd = rc->fd;
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+        if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        fill_common(e, EV_READ);
+        e->dir = 0; e->ret = ret; e->cmd = 0; e->port_idx = *idxp;
+        e->data_len = cap; e->data_trunc = ret > MAX_DATA ? (ret - MAX_DATA) : 0;
+        if (cap && rc->buf) bpf_probe_read_user(e->data, cap, rc->buf);
+        bpf_ringbuf_submit(e, 0);
+        bpf_map_delete_elem(&rd_ctx, &tgid);
+        return 0;
+    }
+
+    if (id == __NR_readv) {
         struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &tgid);
         if (!rc) return 0;
         struct fdkey k; k.tgid = tgid; k.fd = rc->fd;
