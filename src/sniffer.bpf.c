@@ -119,6 +119,9 @@ struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u
 /* Map fd -> target index for quick attribution */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u32); __uint(max_entries, 65536); } fd_portidx SEC(".maps");
 
+/* Carry matched target index from openat enter to exit (per-tgid) */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u32); __uint(max_entries, 32768); } pending_open_idx SEC(".maps");
+
 /* (removed device-id maps; using path matching only) */
 
 static __always_inline void fill_common(struct event *e, __u32 type) {
@@ -159,13 +162,32 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
+        /* Capture filename and try to match now; store matched index for exit */
         const char *filename = NULL;
         bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
         __u32 k0 = 0;
-        struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
-        if (oc) {
-            oc->filename = filename;
-            bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
+        struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+        if (!sg)
+            return 0;
+        int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
+        if (glen <= 0)
+            return 0;
+
+        __s32 matched_idx = -1;
+#pragma unroll
+        for (int i = 0; i < MAX_TARGETS; i++) {
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
+            __u32 ki = i;
+            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+            if (!tpv) continue;
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+            if (sw->path[0] == '\0') continue;
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+        }
+        if (matched_idx >= 0) {
+            __u32 midx = (unsigned)matched_idx;
+            bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         }
         return 0;
     }
@@ -267,34 +289,18 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
-        if (!oc) return 0;
-        __u32 k0 = 0;
-        struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
-        if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
-        int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
-        bpf_map_delete_elem(&op_ctx, &tgid);
-        if (glen <= 0) return 0;
         if (ret >= 0) {
-            __s32 matched_idx = -1;
-#pragma unroll
-            for (int i = 0; i < MAX_TARGETS; i++) {
-                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-                if (!sw) break;
-                __u32 ki = i;
-                struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-                if (!tpv) continue;
-                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-                if (sw->path[0] == '\0') continue;
-                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-            }
-            if (matched_idx >= 0) {
-                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = (unsigned)matched_idx;
+            __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
+            if (idxp) {
+                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-                if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=(unsigned)matched_idx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+                if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+                bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
+        } else {
+            bpf_map_delete_elem(&pending_open_idx, &tgid);
         }
         return 0;
     }
