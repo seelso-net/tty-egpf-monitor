@@ -409,6 +409,10 @@ static void reopen_existing_logs(void)
                 fprintf(stderr, "DEBUG: Failed to reopen log file for port %s (%s): %s\n", ports[i], abs_log_path, strerror(errno));
             }
         }
+        // Even if log already open, ensure info line exists once per boot
+        else if (ports[i][0] != '\0' && port_logs[i]) {
+            write_info_line(i);
+        }
     }
     pthread_mutex_unlock(&ports_mu);
     
@@ -491,10 +495,16 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                     int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
                     
                     if (fd_interest_fd >= 0) {
-                        bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
+                        int rc = bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
+                        if (rc) fprintf(stderr, "ERROR: fd_interest update failed pid=%u fd=%d: %s\n", tgid, fd, strerror(errno));
+                    } else {
+                        fprintf(stderr, "ERROR: fd_interest map fd invalid\n");
                     }
                     if (fd_portidx_fd >= 0) {
-                        bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
+                        int rc2 = bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
+                        if (rc2) fprintf(stderr, "ERROR: fd_portidx update failed pid=%u fd=%d idx=%u: %s\n", tgid, fd, port_idx, strerror(errno));
+                    } else {
+                        fprintf(stderr, "ERROR: fd_portidx map fd invalid\n");
                     }
                     
                     fprintf(stderr, "DEBUG: Found existing fd %d in process %u for %s (link=%s)\n", 
