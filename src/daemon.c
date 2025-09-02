@@ -300,9 +300,6 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     pthread_mutex_unlock(&ports_mu);
     if (rc) { snprintf(err, errsz, "sync map failed"); return -1; }
     
-    // Save configuration after adding port
-    save_config();
-    
     // Scan existing processes for already-open fds to this device
     scan_existing_fds(devpath, idx);
     
@@ -311,117 +308,39 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
 
 static void save_config(void)
 {
-    FILE *f = fopen(CONFIG_FILE, "w");
-    if (!f) {
-        fprintf(stderr, "DEBUG: Failed to save config: %s\n", strerror(errno));
-        return;
-    }
-    
-    fprintf(f, "target_count=%u\n", target_count);
-    for (uint32_t i = 0; i < target_count; i++) {
-        fprintf(f, "port[%u]=%s\n", i, ports[i]);
-        fprintf(f, "log_path[%u]=%s\n", i, log_paths[i]);
-    }
-    fclose(f);
-    fprintf(stderr, "DEBUG: Configuration saved to %s\n", CONFIG_FILE);
+    // Configuration persistence disabled - daemon starts fresh each session
+    // No configuration is saved to disk
 }
 
 static void load_config(void)
 {
-    FILE *f = fopen(CONFIG_FILE, "r");
-    if (!f) {
-        fprintf(stderr, "DEBUG: No config file found: %s\n", CONFIG_FILE);
-        return;
-    }
-    
-    char line[512];
-    while (fgets(line, sizeof(line), f)) {
-        line[strcspn(line, "\n")] = 0; // Remove newline
-        
-        if (strncmp(line, "target_count=", 13) == 0) {
-            target_count = atoi(line + 13);
-            fprintf(stderr, "DEBUG: Loaded target_count=%u\n", target_count);
-        } else if (strncmp(line, "port[", 5) == 0) {
-            int idx;
-            char path[256];
-            if (sscanf(line, "port[%d]=%255s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
-                normalize_path(path, ports[idx], sizeof(ports[idx]));
-                fprintf(stderr, "DEBUG: Loaded port[%d]=%s\n", idx, ports[idx]);
-            }
-        } else if (strncmp(line, "log_path[", 9) == 0) {
-            int idx;
-            char path[512];
-            if (sscanf(line, "log_path[%d]=%s", &idx, path) == 2 && idx >= 0 && idx < MAX_PORTS) {
-                snprintf(log_paths[idx], sizeof(log_paths[idx]), "%s", path);
-                fprintf(stderr, "DEBUG: Loaded log_path[%d]=%s\n", idx, log_paths[idx]);
-            }
-        }
-    }
-    fclose(f);
-    fprintf(stderr, "DEBUG: Configuration loaded from %s\n", CONFIG_FILE);
+    // Configuration persistence disabled - daemon starts fresh each session
+    // No configuration is loaded from disk
+    fprintf(stderr, "DEBUG: Configuration persistence disabled - starting fresh\n");
 }
 
 static void reopen_existing_logs(void)
 {
     fprintf(stderr, "DEBUG: reopen_existing_logs called, target_count=%u\n", target_count);
     
-    // Load configuration from file
-    load_config();
+    // Configuration persistence disabled - no config loaded from file
+    // BPF maps start empty and are populated only via API calls
     
-    // Sync the loaded configuration to BPF maps
+    // Initialize BPF maps with current (empty) state
     int tp_fd = bpf_map__fd(g_skel->maps.target_path);
     int tc_fd = bpf_map__fd(g_skel->maps.target_count);
     
     if (tp_fd >= 0 && tc_fd >= 0) {
-        // Update target_count in BPF map
+        // Initialize target_count to 0
         uint32_t k0 = 0;
         if (bpf_map_update_elem(tc_fd, &k0, &target_count, BPF_ANY) == 0) {
-            fprintf(stderr, "DEBUG: Updated BPF map target_count=%u\n", target_count);
-        }
-        
-        // Update port configurations in BPF map
-        for (uint32_t i = 0; i < target_count; i++) {
-            if (ports[i][0] != '\0') {
-                struct pathval tp;
-                snprintf(tp.path, sizeof(tp.path), "%s", ports[i]);
-                if (bpf_map_update_elem(tp_fd, &i, &tp, BPF_ANY) == 0) {
-                    fprintf(stderr, "DEBUG: Updated BPF map port[%u]='%s'\n", i, ports[i]);
-                }
-            }
+            fprintf(stderr, "DEBUG: Initialized BPF map target_count=%u\n", target_count);
         }
     }
     
-    pthread_mutex_lock(&ports_mu);
-    for (uint32_t i = 0; i < target_count; i++) {
-        fprintf(stderr, "DEBUG: Checking port[%u]='%s', log_paths[%u]='%s', port_logs[%u]=%p\n", 
-                i, ports[i], i, log_paths[i], i, port_logs[i]);
-        if (ports[i][0] != '\0' && !port_logs[i]) {
-            // Reopen log file for this port (prefix relative paths with log dir)
-            char abs_log_path[1024];
-            if (log_paths[i][0] == '/') snprintf(abs_log_path, sizeof(abs_log_path), "%s", log_paths[i]);
-            else snprintf(abs_log_path, sizeof(abs_log_path), "%s/%s", g_log_dir, log_paths[i]);
-            FILE *f = fopen(abs_log_path, "a");
-            if (f) {
-                port_logs[i] = f;
-                fprintf(stderr, "DEBUG: Reopened log file for port %s -> %s\n", ports[i], abs_log_path);
-                write_info_line(i);
-            } else {
-                fprintf(stderr, "DEBUG: Failed to reopen log file for port %s (%s): %s\n", ports[i], abs_log_path, strerror(errno));
-            }
-        }
-        // Even if log already open, ensure info line exists once per boot
-        else if (ports[i][0] != '\0' && port_logs[i]) {
-            write_info_line(i);
-        }
-    }
-    pthread_mutex_unlock(&ports_mu);
-    
-    // Also scan for already-open fds
-    for (uint32_t i = 0; i < target_count; i++) {
-        if (ports[i][0] != '\0') {
-            scan_existing_fds(ports[i], i);
-        }
-    }
+    // Since configuration persistence is disabled, target_count starts at 0
+    // No existing logs to reopen, no existing FDs to scan
+    // Ports will be added dynamically via API calls
 }
 
 static void *fd_scanner_thread(void *arg)
