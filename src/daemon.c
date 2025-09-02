@@ -363,94 +363,60 @@ static void *fd_scanner_thread(void *arg)
 
 static void scan_existing_fds(const char *devpath, uint32_t port_idx)
 {
-    fprintf(stderr, "DEBUG: scan_existing_fds called for devpath='%s', port_idx=%u\n", devpath, port_idx);
+    fprintf(stderr, "DEBUG: scan_existing_fds called for devpath='%s' (len=%zu), port_idx=%u\n", 
+            devpath, strlen(devpath), port_idx);
     
-    DIR *proc_dir = opendir("/proc");
-    if (!proc_dir) {
-        fprintf(stderr, "DEBUG: Failed to open /proc: %s\n", strerror(errno));
+    // Alternative approach: use lsof to find processes with the device open
+    // This avoids permission issues with /proc/*/fd/ directories
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "lsof %s 2>/dev/null | awk 'NR>1 {print $2, $4}' | grep -E '^[0-9]+ [0-9]+[rw]?$'", devpath);
+    
+    FILE *lsof = popen(cmd, "r");
+    if (!lsof) {
+        fprintf(stderr, "DEBUG: Failed to run lsof command: %s\n", strerror(errno));
         return;
     }
     
-    struct dirent *pid_entry;
-    char fd_path[512], link_path[512];
+    char line[256];
     int matches_found = 0;
     
-    while ((pid_entry = readdir(proc_dir))) {
-        // Skip non-numeric entries (not PIDs)
-        if (!isdigit(pid_entry->d_name[0])) continue;
-        
-        uint32_t tgid = atoi(pid_entry->d_name);
-        snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", pid_entry->d_name);
-        
-        DIR *fd_dir = opendir(fd_path);
-        if (!fd_dir) continue; // Permission denied is normal for other users' processes
-        
-        struct dirent *fd_entry;
-        while ((fd_entry = readdir(fd_dir))) {
-            if (!isdigit(fd_entry->d_name[0])) continue;
-            
-            snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
-            char target[PATH_MAX];
-            ssize_t len = readlink(link_path, target, sizeof(target) - 1);
-            if (len > 0) {
-                target[len] = '\0';
-                char norm_target[PATH_MAX];
-                char norm_dev[PATH_MAX];
-                normalize_path(target, norm_target, sizeof(norm_target));
-                normalize_path(devpath, norm_dev, sizeof(norm_dev));
-                int match = (strcmp(norm_target, norm_dev) == 0);
+    fprintf(stderr, "DEBUG: Running lsof command: %s\n", cmd);
+    
+    while (fgets(line, sizeof(line), lsof)) {
+        uint32_t tgid;
+        char fd_str[32];
+        if (sscanf(line, "%u %31s", &tgid, fd_str) == 2) {
+            // Extract numeric part of fd (remove r/w suffix if present)
+            int fd = -1;
+            if (sscanf(fd_str, "%d", &fd) == 1 && fd >= 0) {
+                matches_found++;
                 
-                // Debug: Print what we're checking
-                if (strstr(target, "ttyUSB") || strstr(target, "pts")) {
-                    fprintf(stderr, "DEBUG: Checking PID %u FD %s: target='%s' norm_target='%s' vs norm_dev='%s' match=%d\n",
-                            tgid, fd_entry->d_name, target, norm_target, norm_dev, match);
-                }
+                struct fdkey k = { .tgid = tgid, .fd = fd };
+                uint8_t one = 1;
                 
-                if (!match) {
-                    struct stat st_fd = {0}, st_dev = {0};
-                    if (stat(norm_target, &st_fd) == 0 && stat(norm_dev, &st_dev) == 0) {
-                        if (S_ISCHR(st_fd.st_mode) && S_ISCHR(st_dev.st_mode) && st_fd.st_rdev == st_dev.st_rdev) {
-                            match = 1;
-                            fprintf(stderr, "DEBUG: rdev match %s(%u:%u) == %s(%u:%u)\n",
-                                    norm_target, major(st_fd.st_rdev), minor(st_fd.st_rdev),
-                                    norm_dev,    major(st_dev.st_rdev), minor(st_dev.st_rdev));
-                        }
-                    }
+                fprintf(stderr, "DEBUG: Found matching fd %d in process %u for %s\n", 
+                        fd, tgid, devpath);
+                
+                int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
+                int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
+                
+                if (fd_interest_fd >= 0) {
+                    int rc = bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
+                    if (rc) fprintf(stderr, "ERROR: fd_interest update failed pid=%u fd=%d: %s\n", tgid, fd, strerror(errno));
+                } else {
+                    fprintf(stderr, "ERROR: fd_interest map fd invalid\n");
                 }
-                if (match) {
-                    matches_found++;
-                    // Found a match! Update BPF maps
-                    int fd = atoi(fd_entry->d_name);
-                    struct fdkey k = { .tgid = tgid, .fd = fd };
-                    uint8_t one = 1;
-                    
-                    fprintf(stderr, "DEBUG: Found matching fd %d in process %u for %s (link=%s)\n", 
-                            fd, tgid, devpath, target);
-                    
-                    int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
-                    int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
-                    
-                    if (fd_interest_fd >= 0) {
-                        int rc = bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
-                        if (rc) fprintf(stderr, "ERROR: fd_interest update failed pid=%u fd=%d: %s\n", tgid, fd, strerror(errno));
-                    } else {
-                        fprintf(stderr, "ERROR: fd_interest map fd invalid\n");
-                    }
-                    if (fd_portidx_fd >= 0) {
-                        int rc2 = bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
-                        if (rc2) fprintf(stderr, "ERROR: fd_portidx update failed pid=%u fd=%d idx=%u: %s\n", tgid, fd, port_idx, strerror(errno));
-                    } else {
-                        fprintf(stderr, "ERROR: fd_portidx map fd invalid\n");
-                    }
-                    
-                    fprintf(stderr, "DEBUG: Found existing fd %d in process %u for %s (link=%s)\n", 
-                            fd, tgid, devpath, norm_target);
+                if (fd_portidx_fd >= 0) {
+                    int rc2 = bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
+                    if (rc2) fprintf(stderr, "ERROR: fd_portidx update failed pid=%u fd=%d idx=%u: %s\n", tgid, fd, port_idx, strerror(errno));
+                } else {
+                    fprintf(stderr, "ERROR: fd_portidx map fd invalid\n");
                 }
             }
         }
-        closedir(fd_dir);
     }
-    closedir(proc_dir);
+    
+    pclose(lsof);
     
     fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: found %d matches\n", devpath, matches_found);
 }
