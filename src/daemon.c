@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <time.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -468,7 +469,19 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                 char norm_dev[PATH_MAX];
                 normalize_path(target, norm_target, sizeof(norm_target));
                 normalize_path(devpath, norm_dev, sizeof(norm_dev));
-                if (strcmp(norm_target, norm_dev) == 0) {
+                int match = (strcmp(norm_target, norm_dev) == 0);
+                if (!match) {
+                    struct stat st_fd = {0}, st_dev = {0};
+                    if (stat(norm_target, &st_fd) == 0 && stat(norm_dev, &st_dev) == 0) {
+                        if (S_ISCHR(st_fd.st_mode) && S_ISCHR(st_dev.st_mode) && st_fd.st_rdev == st_dev.st_rdev) {
+                            match = 1;
+                            fprintf(stderr, "DEBUG: rdev match %s(%u:%u) == %s(%u:%u)\n",
+                                    norm_target, major(st_fd.st_rdev), minor(st_fd.st_rdev),
+                                    norm_dev,    major(st_dev.st_rdev), minor(st_dev.st_rdev));
+                        }
+                    }
+                }
+                if (match) {
                     // Found a match! Update BPF maps
                     int fd = atoi(fd_entry->d_name);
                     struct fdkey k = { .tgid = tgid, .fd = fd };
@@ -484,8 +497,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                         bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
                     }
                     
-                    fprintf(stderr, "DEBUG: Found existing fd %d in process %u for %s\n", 
-                            fd, tgid, devpath);
+                    fprintf(stderr, "DEBUG: Found existing fd %d in process %u for %s (link=%s)\n", 
+                            fd, tgid, devpath, norm_target);
                 }
             }
         }
