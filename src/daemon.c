@@ -369,7 +369,27 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     // Alternative approach: use lsof to find processes with the device open
     // This avoids permission issues with /proc/*/fd/ directories
     char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "lsof %s 2>/dev/null", devpath);
+    
+    // Try to find lsof in common locations
+    const char *lsof_paths[] = {"/usr/bin/lsof", "/bin/lsof", "/usr/sbin/lsof", "lsof", NULL};
+    const char *lsof_cmd = NULL;
+    
+    for (int i = 0; lsof_paths[i]; i++) {
+        char test_cmd[256];
+        snprintf(test_cmd, sizeof(test_cmd), "which %s >/dev/null 2>&1", lsof_paths[i]);
+        if (system(test_cmd) == 0) {
+            lsof_cmd = lsof_paths[i];
+            break;
+        }
+    }
+    
+    if (!lsof_cmd) {
+        fprintf(stderr, "DEBUG: lsof command not found in any standard location\n");
+        return;
+    }
+    
+    snprintf(cmd, sizeof(cmd), "%s %s 2>&1", lsof_cmd, devpath);
+    fprintf(stderr, "DEBUG: Using lsof command: %s\n", lsof_cmd);
     
     FILE *lsof = popen(cmd, "r");
     if (!lsof) {
@@ -382,12 +402,16 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     
     fprintf(stderr, "DEBUG: Running lsof command: %s\n", cmd);
     
-    // Skip header line
-    if (fgets(line, sizeof(line), lsof)) {
-        fprintf(stderr, "DEBUG: lsof header: %s", line);
-    }
-    
+    // Read all output from lsof, including any error messages
+    int line_count = 0;
     while (fgets(line, sizeof(line), lsof)) {
+        line_count++;
+        fprintf(stderr, "DEBUG: lsof output line %d: %s", line_count, line);
+        
+        // Skip header line (first line)
+        if (line_count == 1) {
+            continue;
+        }
         fprintf(stderr, "DEBUG: lsof line: %s", line);
         
         // Parse lsof output: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
@@ -434,7 +458,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     
     pclose(lsof);
     
-    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: found %d matches\n", devpath, matches_found);
+    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: processed %d lines, found %d matches\n", 
+            devpath, line_count, matches_found);
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)
