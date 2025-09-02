@@ -381,6 +381,29 @@ static void reopen_existing_logs(void)
             if (f) {
                 port_logs[i] = f;
                 fprintf(stderr, "DEBUG: Reopened log file for port %s -> %s\n", ports[i], abs_log_path);
+                // Write an informational line so logs are never empty
+                struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
+                // Try to detect current baud using stty; fall back to -1
+                int baud = -1;
+                {
+                    char cmd[512]; snprintf(cmd, sizeof(cmd), "stty -F %s -a 2>/dev/null", ports[i]);
+                    FILE *pf = popen(cmd, "r");
+                    if (pf) {
+                        char line[1024];
+                        if (fgets(line, sizeof(line), pf)) {
+                            const char *sp = strstr(line, "speed ");
+                            if (sp) {
+                                sp += 6; // after 'speed '
+                                baud = atoi(sp);
+                            }
+                        }
+                        pclose(pf);
+                    }
+                }
+                fprintf(port_logs[i],
+                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"passive\",\"baud\":%d}\n",
+                        (uint64_t)ts.tv_sec, ts.tv_nsec, ports[i], baud);
+                fflush(port_logs[i]);
             } else {
                 fprintf(stderr, "DEBUG: Failed to reopen log file for port %s (%s): %s\n", ports[i], abs_log_path, strerror(errno));
             }
