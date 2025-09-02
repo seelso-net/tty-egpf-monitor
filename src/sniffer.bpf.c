@@ -103,6 +103,9 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, stru
 struct pathval { char path[MAX_PATH]; };
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct pathval); __uint(max_entries, MAX_TARGETS); } target_path SEC(".maps");
 
+/* Target device dev_t (major:minor) from stat(2), populated by userspace */
+struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u64); __uint(max_entries, MAX_TARGETS); } target_dev SEC(".maps");
+
 /* Number of configured targets (0..MAX_TARGETS). Optional optimization hint. */
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, __u32); __uint(max_entries, 1); } target_count SEC(".maps");
 
@@ -313,20 +316,56 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
 
     if (id == __NR_openat || id == __NR_openat2) {
         if (ret >= 0) {
+            __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
+            if (dv2) dv2->exit_seen_raw += 1;
+
+            /* First, if path match was recorded, use it */
             __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
             if (idxp) {
-                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
+                __u32 midx = *idxp;
+                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1;
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
                 if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
-                bpf_printk("open-exit raw: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
-                __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
-                if (dv2) { dv2->exit_seen_raw += 1; dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; }
+                bpf_printk("open-exit raw(path): tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
+                if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
+                return 0;
             }
-        } else {
-            bpf_map_delete_elem(&pending_open_idx, &tgid);
+
+            /* Fallback: match by device major:minor */
+            struct task_struct *task = (void *)bpf_get_current_task();
+            struct files_struct *files = BPF_CORE_READ(task, files);
+            struct fdtable *fdt = BPF_CORE_READ(files, fdt);
+            struct file **fdtab = BPF_CORE_READ(fdt, fd);
+            struct file *filp = NULL;
+            /* fd is small int ret; read pointer from array */
+            bpf_probe_read_kernel(&filp, sizeof(filp), &fdtab[(__s32)ret]);
+            if (!filp) return 0;
+            struct inode *inode = BPF_CORE_READ(filp, f_inode);
+            unsigned long long rdev = 0;
+            bpf_probe_read_kernel(&rdev, sizeof(rdev), &inode->i_rdev);
+
+            __s32 matched_idx = -1;
+#pragma unroll
+            for (int i = 0; i < MAX_TARGETS; i++) {
+                __u32 ki = i;
+                __u64 *td = bpf_map_lookup_elem(&target_dev, &ki);
+                if (!td) continue;
+                if (*td == 0) continue;
+                if (*td == rdev) { matched_idx = i; break; }
+            }
+            if (matched_idx >= 0) {
+                __u32 midx = (unsigned)matched_idx;
+                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1;
+                bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+                bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+                struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+                if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+                bpf_printk("open-exit raw(dev): tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
+                if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
+            }
         }
         return 0;
     }
