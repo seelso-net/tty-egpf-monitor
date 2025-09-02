@@ -288,10 +288,30 @@ static int sync_targets_map(void)
 {
     int tp_fd = bpf_map__fd(g_skel->maps.target_path);
     if (tp_fd < 0) return -1;
+    
+    int td_fd = bpf_map__fd(g_skel->maps.target_dev);
+    if (td_fd < 0) return -1;
+    
     for (uint32_t i=0;i<MAX_PORTS;i++) {
         if (bpf_map_update_elem(tp_fd, &i, ports[i], BPF_ANY)) return -1;
-        /* (removed device-id map updates) */
+        
+        // Get device major:minor for BPF matching
+        if (ports[i][0] != '\0') {
+            struct stat st;
+            if (stat(ports[i], &st) == 0) {
+                uint64_t dev_t = st.st_rdev;
+                if (bpf_map_update_elem(td_fd, &i, &dev_t, BPF_ANY)) {
+                    fprintf(stderr, "WARNING: Failed to update target_dev[%u] with dev_t %lu\n", i, (unsigned long)dev_t);
+                } else {
+                    fprintf(stderr, "DEBUG: Updated target_dev[%u] with dev_t %lu (major=%u, minor=%u)\n", 
+                            i, (unsigned long)dev_t, major(dev_t), minor(dev_t));
+                }
+            } else {
+                fprintf(stderr, "WARNING: Failed to stat %s: %s\n", ports[i], strerror(errno));
+            }
+        }
     }
+    
     int tc_fd = bpf_map__fd(g_skel->maps.target_count);
     if (tc_fd >= 0) {
         uint32_t k0 = 0;
@@ -944,53 +964,77 @@ int main(int argc, char **argv)
     // DEBUG: Check individual program attachments
     fprintf(stderr, "DEBUG: Checking individual BPF program attachments...\n");
     
-    // Check if programs are actually attached
-    if (g_skel->progs.tp_raw_sys_enter) {
-        fprintf(stderr, "DEBUG: tp_raw_sys_enter program found in skeleton\n");
+    // Check if programs are actually attached to tracepoints
+    if (g_skel->links.tp_raw_sys_enter) {
+        fprintf(stderr, "DEBUG: tp_raw_sys_enter program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_raw_sys_enter program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_raw_sys_enter program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_raw_sys_exit) {
-        fprintf(stderr, "DEBUG: tp_raw_sys_exit program found in skeleton\n");
+    if (g_skel->links.tp_raw_sys_exit) {
+        fprintf(stderr, "DEBUG: tp_raw_sys_exit program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_raw_sys_exit program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_raw_sys_exit program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_enter_close) {
-        fprintf(stderr, "DEBUG: tp_enter_close program found in skeleton\n");
+    if (g_skel->links.tp_enter_openat_tp) {
+        fprintf(stderr, "DEBUG: tp_enter_openat_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_enter_close program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_enter_openat_tp program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_exit_close) {
-        fprintf(stderr, "DEBUG: tp_exit_close program found in skeleton\n");
+    if (g_skel->links.tp_enter_openat2_tp) {
+        fprintf(stderr, "DEBUG: tp_enter_openat2_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_exit_close program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_enter_openat2_tp program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_enter_write) {
-        fprintf(stderr, "DEBUG: tp_enter_write program found in skeleton\n");
+    if (g_skel->links.tp_exit_openat_tp) {
+        fprintf(stderr, "DEBUG: tp_exit_openat_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_enter_write program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_exit_openat_tp program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_enter_read) {
-        fprintf(stderr, "DEBUG: tp_enter_read program found in skeleton\n");
+    if (g_skel->links.tp_exit_openat2_tp) {
+        fprintf(stderr, "DEBUG: tp_exit_openat2_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_enter_read program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_exit_openat2_tp program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_exit_read) {
-        fprintf(stderr, "DEBUG: tp_exit_read program found in skeleton\n");
+    if (g_skel->links.tp_enter_close) {
+        fprintf(stderr, "DEBUG: tp_enter_close program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_exit_read program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_enter_close program NOT attached to tracepoint\n");
     }
     
-    if (g_skel->progs.tp_enter_ioctl) {
-        fprintf(stderr, "DEBUG: tp_enter_ioctl program found in skeleton\n");
+    if (g_skel->links.tp_exit_close) {
+        fprintf(stderr, "DEBUG: tp_exit_close program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_enter_ioctl program not found in skeleton\n");
+        fprintf(stderr, "ERROR: tp_exit_close program NOT attached to tracepoint\n");
+    }
+    
+    if (g_skel->links.tp_enter_write) {
+        fprintf(stderr, "DEBUG: tp_enter_write program attached to tracepoint\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_write program NOT attached to tracepoint\n");
+    }
+    
+    if (g_skel->links.tp_enter_read) {
+        fprintf(stderr, "DEBUG: tp_enter_read program attached to tracepoint\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_read program NOT attached to tracepoint\n");
+    }
+    
+    if (g_skel->links.tp_exit_read) {
+        fprintf(stderr, "DEBUG: tp_exit_read program attached to tracepoint\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_exit_read program NOT attached to tracepoint\n");
+    }
+    
+    if (g_skel->links.tp_enter_ioctl) {
+        fprintf(stderr, "DEBUG: tp_enter_ioctl program attached to tracepoint\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_ioctl program NOT attached to tracepoint\n");
     }
     
     fprintf(stderr, "DEBUG: Individual BPF program attachment check completed\n");
