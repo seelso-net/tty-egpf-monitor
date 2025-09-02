@@ -52,9 +52,8 @@ make -j$(nproc)
 
 # Remove existing libbpf installations to avoid conflicts
 echo "Removing existing libbpf installations..."
-# ONLY remove libbpf packages, not system networking
-apt-get remove -y libbpf0 || true
-# Don't run autoremove - it's too aggressive
+# DON'T remove system packages - install alongside instead
+echo "Installing libbpf 1.6.2 alongside existing system packages..."
 
 # Install new libbpf
 echo "Installing libbpf 1.6.2..."
