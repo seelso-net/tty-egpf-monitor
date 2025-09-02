@@ -22,6 +22,22 @@ typedef long long          __s64;
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
+/* Avoid kernel asm includes in BPF C; hard-define x86_64 syscall numbers */
+#ifndef __NR_read
+#define __NR_read   0
+#endif
+#ifndef __NR_write
+#define __NR_write  1
+#endif
+#ifndef __NR_openat
+#define __NR_openat 257
+#endif
+#ifndef __NR_ioctl
+#define __NR_ioctl  16
+#endif
+#ifndef __NR_openat2
+#define __NR_openat2 437
+#endif
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -125,61 +141,96 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
 
 /* (removed basename_offset function - using exact path matching only) */
 
-/* ---------- sys_enter_openat ---------- */
-SEC("tracepoint/syscalls/sys_enter_openat")
-int tp_enter_openat(struct trace_event_raw_sys_enter *ctx)
+/* ---------- raw_syscalls-based attach for reliable args access ---------- */
+SEC("tracepoint/raw_syscalls/sys_enter")
+int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
 {
-    const char *filename;
-    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    long id = 0;
+    bpf_probe_read_kernel(&id, sizeof(id), &ctx->id);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    /* Use scratch buffer to avoid stack access issues */
-    __u32 k0 = 0;
-    struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
-    if (!oc) return 0;
-    oc->filename = filename;
-    bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
+
+    if (id == __NR_openat || id == __NR_openat2) {
+        const char *filename = NULL;
+        bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+        __u32 k0 = 0;
+        struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
+        if (oc) {
+            oc->filename = filename;
+            bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
+        }
+        return 0;
+    }
+
+    if (id == __NR_write) {
+        __s32 fd; const void __user *buf; size_t count;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
+        bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
+        struct fdkey k = { .tgid = tgid, .fd = fd };
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+        if (!idxp) return 0;
+        size_t cap = count > MAX_DATA ? MAX_DATA : count;
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) return 0;
+        fill_common(e, EV_WRITE);
+        e->dir = 1; e->ret = 0; e->cmd = 0; e->port_idx = *idxp;
+        e->data_len = cap; e->data_trunc = count > MAX_DATA ? (count - MAX_DATA) : 0;
+        if (cap && buf) bpf_probe_read_user(e->data, cap, buf);
+        bpf_ringbuf_submit(e, 0);
+        return 0;
+    }
+
+    if (id == __NR_read) {
+        __s32 fd; const void __user *buf; size_t count;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
+        bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
+        __u32 k0 = 0;
+        struct read_ctx *rc = bpf_map_lookup_elem(&scratch3, &k0);
+        if (!rc) return 0;
+        rc->fd = fd; rc->buf = buf; rc->count = count;
+        bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
+        return 0;
+    }
+
+    if (id == __NR_ioctl) {
+        __s32 fd; __u32 cmd;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        bpf_probe_read_kernel(&cmd, sizeof(cmd), &ctx->args[1]);
+        struct fdkey k = { .tgid = tgid, .fd = fd };
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+        if (!idxp) return 0;
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) return 0;
+        fill_common(e, EV_IOCTL);
+        e->cmd = cmd; e->ret = 0; e->dir = 0; e->port_idx = *idxp;
+        e->data_len = 0; e->data_trunc = 0;
+        bpf_ringbuf_submit(e, 0);
+        return 0;
+    }
+
     return 0;
 }
 
-/* ---------- sys_enter_openat2 ---------- */
-SEC("tracepoint/syscalls/sys_enter_openat2")
-int tp_enter_openat2(struct trace_event_raw_sys_enter *ctx)
+SEC("tracepoint/raw_syscalls/sys_exit")
+int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
 {
-    const char *filename;
-    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
-    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    /* Use scratch buffer to avoid stack access issues */
-    __u32 k0 = 0;
-    struct open_ctx *oc = bpf_map_lookup_elem(&scratch4, &k0);
-    if (!oc) return 0;
-    oc->filename = filename;
-    bpf_map_update_elem(&op_ctx, &tgid, oc, BPF_ANY);
-    return 0;
-}
-
-/* ---------- sys_exit_openat ---------- */
-SEC("tracepoint/syscalls/sys_exit_openat")
-int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
-{
-    __s64 ret;
-    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret); /* new fd if >=0 */
+    long id = 0; __s64 ret = 0;
+    bpf_probe_read_kernel(&id, sizeof(id), &ctx->id);
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
-    struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
-    if (!oc) return 0;
-
-    __u32 k0 = 0;
-
-    /* scratch2 := user path (from userspace pointer) */
-    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
-    if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
-    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
-    bpf_map_delete_elem(&op_ctx, &tgid);
-    if (glen <= 0) return 0;
-
-    if (ret >= 0) {
-        /* Match path against configured targets and set fd maps */
-        __s32 matched_idx = -1;
+    if (id == __NR_openat || id == __NR_openat2) {
+        struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
+        if (!oc) return 0;
+        __u32 k0 = 0;
+        struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+        if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
+        int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
+        bpf_map_delete_elem(&op_ctx, &tgid);
+        if (glen <= 0) return 0;
+        if (ret >= 0) {
+            __s32 matched_idx = -1;
 #pragma unroll
             for (int i = 0; i < MAX_TARGETS; i++) {
                 struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
@@ -188,86 +239,39 @@ int tp_exit_openat(struct trace_event_raw_sys_exit *ctx)
                 struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
                 if (!tpv) continue;
                 bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-                if (sw->path[0] == '\0') continue; /* unused slot */
+                if (sw->path[0] == '\0') continue;
                 if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
             }
-
-        if (matched_idx >= 0) {
-            struct fdkey k;
-            k.tgid = tgid;
-            k.fd = (__s32)ret;
-            __u8 one = 1;
-            __u32 midx = (unsigned)matched_idx;
-            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+            if (matched_idx >= 0) {
+                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = (unsigned)matched_idx;
+                bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+                bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+                struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+                if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=(unsigned)matched_idx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+            }
         }
-
-        if (matched_idx >= 0) {
-            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-            if (!e) return 0;
-            fill_common(e, EV_OPEN);
-            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = (unsigned)matched_idx;
-            e->data_len = 0; e->data_trunc = 0;
-            bpf_ringbuf_submit(e, 0);
-        }
+        return 0;
     }
-    return 0;
-}
 
-/* ---------- sys_exit_openat2 ---------- */
-SEC("tracepoint/syscalls/sys_exit_openat2")
-int tp_exit_openat2(struct trace_event_raw_sys_exit *ctx)
-{
-    __s64 ret;
-    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret); /* new fd if >=0 */
-    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-
-    struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
-    if (!oc) return 0;
-
-    __u32 k0 = 0;
-
-    /* scratch2 := user path (from userspace pointer) */
-    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
-    if (!sg) { bpf_map_delete_elem(&op_ctx, &tgid); return 0; }
-    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
-    bpf_map_delete_elem(&op_ctx, &tgid);
-        if (glen <= 0) return 0;
-
-    if (ret >= 0) {
-        /* Match path against configured targets and set fd maps */
-        __s32 matched_idx = -1;
-#pragma unroll
-        for (int i = 0; i < MAX_TARGETS; i++) {
-            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-            if (!sw) break;
-            __u32 ki = i;
-            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-            if (!tpv) continue;
-            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-            if (sw->path[0] == '\0') continue; /* unused slot */
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-        }
-
-        if (matched_idx >= 0) {
-            struct fdkey k;
-            k.tgid = tgid;
-            k.fd = (__s32)ret;
-            __u8 one = 1;
-            __u32 midx = (unsigned)matched_idx;
-            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-        }
-
-        if (matched_idx >= 0) {
-            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-            if (!e) return 0;
-            fill_common(e, EV_OPEN);
-            e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = (unsigned)matched_idx;
-            e->data_len = 0; e->data_trunc = 0;
-            bpf_ringbuf_submit(e, 0);
-        }
+    if (id == __NR_read) {
+        struct read_ctx *rc = bpf_map_lookup_elem(&rd_ctx, &tgid);
+        if (!rc) return 0;
+        struct fdkey k; k.tgid = tgid; k.fd = rc->fd;
+        __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+        if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+        struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+        if (!e) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        fill_common(e, EV_READ);
+        e->dir = 0; e->ret = ret; e->cmd = 0; e->port_idx = *idxp;
+        e->data_len = cap; e->data_trunc = ret > MAX_DATA ? (ret - MAX_DATA) : 0;
+        if (cap && rc->buf) bpf_probe_read_user(e->data, cap, rc->buf);
+        bpf_ringbuf_submit(e, 0);
+        bpf_map_delete_elem(&rd_ctx, &tgid);
+        return 0;
     }
+
     return 0;
 }
 

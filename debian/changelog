@@ -1,3 +1,18 @@
+tty-egpf-monitor (0.4.45-1) unstable; urgency=medium
+
+  * fix(bpf): initialize scratch buffers at load time
+  * feat(bpf): switch to raw_syscalls tracepoints for reliable arg access
+  * fix(logging): ensure events are flushed and JSON lines written
+
+ -- Adrian <adrian@example.com>  Tue, 02 Sep 2025 00:00:00 +0000
+
+tty-egpf-monitor (0.4.44-1) unstable; urgency=medium
+
+  * fix(runtime): better libbpf version reporting and compatibility checks
+  * fix(service): avoid start timeouts; rely on daemon chmod for socket
+
+ -- Adrian <adrian@example.com>  Mon, 01 Sep 2025 23:00:00 +0000
+
 tty-egpf-monitor (0.4.4-1) unstable; urgency=medium
 
   * Initial release
