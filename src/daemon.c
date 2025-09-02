@@ -363,11 +363,17 @@ static void *fd_scanner_thread(void *arg)
 
 static void scan_existing_fds(const char *devpath, uint32_t port_idx)
 {
+    fprintf(stderr, "DEBUG: scan_existing_fds called for devpath='%s', port_idx=%u\n", devpath, port_idx);
+    
     DIR *proc_dir = opendir("/proc");
-    if (!proc_dir) return;
+    if (!proc_dir) {
+        fprintf(stderr, "DEBUG: Failed to open /proc: %s\n", strerror(errno));
+        return;
+    }
     
     struct dirent *pid_entry;
     char fd_path[512], link_path[512];
+    int matches_found = 0;
     
     while ((pid_entry = readdir(proc_dir))) {
         // Skip non-numeric entries (not PIDs)
@@ -377,7 +383,7 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
         snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", pid_entry->d_name);
         
         DIR *fd_dir = opendir(fd_path);
-        if (!fd_dir) continue;
+        if (!fd_dir) continue; // Permission denied is normal for other users' processes
         
         struct dirent *fd_entry;
         while ((fd_entry = readdir(fd_dir))) {
@@ -393,6 +399,13 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                 normalize_path(target, norm_target, sizeof(norm_target));
                 normalize_path(devpath, norm_dev, sizeof(norm_dev));
                 int match = (strcmp(norm_target, norm_dev) == 0);
+                
+                // Debug: Print what we're checking
+                if (strstr(target, "ttyUSB") || strstr(target, "pts")) {
+                    fprintf(stderr, "DEBUG: Checking PID %u FD %s: target='%s' norm_target='%s' vs norm_dev='%s' match=%d\n",
+                            tgid, fd_entry->d_name, target, norm_target, norm_dev, match);
+                }
+                
                 if (!match) {
                     struct stat st_fd = {0}, st_dev = {0};
                     if (stat(norm_target, &st_fd) == 0 && stat(norm_dev, &st_dev) == 0) {
@@ -405,10 +418,14 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                     }
                 }
                 if (match) {
+                    matches_found++;
                     // Found a match! Update BPF maps
                     int fd = atoi(fd_entry->d_name);
                     struct fdkey k = { .tgid = tgid, .fd = fd };
                     uint8_t one = 1;
+                    
+                    fprintf(stderr, "DEBUG: Found matching fd %d in process %u for %s (link=%s)\n", 
+                            fd, tgid, devpath, target);
                     
                     int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
                     int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
@@ -434,6 +451,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
         closedir(fd_dir);
     }
     closedir(proc_dir);
+    
+    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: found %d matches\n", devpath, matches_found);
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)
