@@ -60,9 +60,15 @@ echo "Installing libbpf 1.6.2..."
 make install PREFIX=/usr/local
 ldconfig
 
+# Configure library search paths automatically
+echo "Configuring library search paths..."
+echo "/usr/local/lib64" | tee /etc/ld.so.conf.d/local.conf
+ldconfig
+
 # Verify installation
 if [ -f /usr/local/lib64/libbpf.so.1 ]; then
     echo "✅ libbpf 1.6.2 installed successfully at /usr/local/lib64/"
+    echo "✅ Library paths configured automatically"
     echo "✅ BPF tracepoint attachment should now work properly"
     
     # Restart the daemon to pick up new libbpf
