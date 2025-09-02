@@ -12,51 +12,79 @@ case "$1" in
         if [ -f /etc/os-release ]; then
             . /etc/os-release
             if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "22.04" ]; then
-                echo "Ubuntu 22.04 (jammy) detected - upgrading libbpf for BPF compatibility..."
+                echo "Ubuntu 22.04 (jammy) detected - scheduling libbpf upgrade for BPF compatibility..."
                 
                 # Check current libbpf version
                 CURRENT_LIBBPF=$(dpkg -l | grep libbpf0 | awk '{print $3}' | cut -d: -f2 | cut -d- -f1)
                 echo "Current system libbpf version: $CURRENT_LIBBPF"
                 
                 if [ "$CURRENT_LIBBPF" = "0.5.0" ]; then
-                    echo "System has libbpf 0.5.0 - upgrading to 1.6.2+ for BPF tracepoint compatibility..."
+                    echo "System has libbpf 0.5.0 - scheduling upgrade to 1.6.2+ for BPF tracepoint compatibility..."
                     
-                    # Install build dependencies
-                    echo "Installing build dependencies..."
-                    apt-get update
-                    apt-get install -y build-essential git pkg-config libelf-dev zlib1g-dev
-                    
-                    # Build and install libbpf 1.6.2
-                    echo "Building libbpf 1.6.2 from source..."
-                    cd /tmp
-                    if [ -d libbpf ]; then
-                        rm -rf libbpf
-                    fi
-                    git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
-                    cd libbpf/src
-                    make -j$(nproc)
-                    
-                    # Remove existing libbpf installations to avoid conflicts
-                    echo "Removing existing libbpf installations..."
-                    apt-get remove -y libbpf0 libbpf-dev || true
-                    apt-get autoremove -y || true
-                    
-                    # Install new libbpf
-                    echo "Installing libbpf 1.6.2..."
-                    make install PREFIX=/usr/local
-                    ldconfig
-                    
-                    # Verify installation
-                    if [ -f /usr/local/lib64/libbpf.so.1 ]; then
-                        echo "✅ libbpf 1.6.2 installed successfully at /usr/local/lib64/"
-                        echo "✅ BPF tracepoint attachment should now work properly"
-                    else
-                        echo "❌ libbpf installation failed - BPF programs may not work"
-                    fi
-                    
-                    # Clean up build files
-                    cd /
-                    rm -rf /tmp/libbpf
+                    # Create a background upgrade script to avoid package manager conflicts
+                    cat > /tmp/upgrade_libbpf.sh << 'EOF'
+#!/bin/bash
+set -e
+echo "Starting libbpf upgrade in background..."
+sleep 5  # Wait for package manager to finish
+
+# Check if we can access package manager
+while ! apt-get update >/dev/null 2>&1; do
+    echo "Waiting for package manager to be available..."
+    sleep 10
+done
+
+echo "Package manager available, starting libbpf upgrade..."
+
+# Install build dependencies
+echo "Installing build dependencies..."
+apt-get install -y build-essential git pkg-config libelf-dev zlib1g-dev
+
+# Build and install libbpf 1.6.2
+echo "Building libbpf 1.6.2 from source..."
+cd /tmp
+if [ -d libbpf ]; then
+    rm -rf libbpf
+fi
+git clone --depth 1 --branch v1.6.2 https://github.com/libbpf/libbpf.git
+cd libbpf/src
+make -j$(nproc)
+
+# Remove existing libbpf installations to avoid conflicts
+echo "Removing existing libbpf installations..."
+apt-get remove -y libbpf0 libbpf-dev || true
+apt-get autoremove -y || true
+
+# Install new libbpf
+echo "Installing libbpf 1.6.2..."
+make install PREFIX=/usr/local
+ldconfig
+
+# Verify installation
+if [ -f /usr/local/lib64/libbpf.so.1 ]; then
+    echo "✅ libbpf 1.6.2 installed successfully at /usr/local/lib64/"
+    echo "✅ BPF tracepoint attachment should now work properly"
+    
+    # Restart the daemon to pick up new libbpf
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "Restarting tty-egpf-monitord to use new libbpf..."
+        systemctl restart tty-egpf-monitord
+    fi
+else
+    echo "❌ libbpf installation failed - BPF programs may not work"
+fi
+
+# Clean up build files
+cd /
+rm -rf /tmp/libbpf
+echo "libbpf upgrade completed"
+EOF
+
+                    # Make it executable and run in background
+                    chmod +x /tmp/upgrade_libbpf.sh
+                    nohup /tmp/upgrade_libbpf.sh > /tmp/libbpf_upgrade.log 2>&1 &
+                    echo "libbpf upgrade scheduled in background (PID: $!)"
+                    echo "Check progress with: tail -f /tmp/libbpf_upgrade.log"
                     
                 else
                     echo "System libbpf version $CURRENT_LIBBPF is compatible - no upgrade needed"
