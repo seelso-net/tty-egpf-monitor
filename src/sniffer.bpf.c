@@ -275,6 +275,8 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     return 0;
 }
 
+/* (no fallback syscalls openat hooks; raw_syscalls handles open mapping) */
+
 /* LSM hook removed in favor of userspace mapping */
 
 /* ---------- sys_enter_close ---------- */

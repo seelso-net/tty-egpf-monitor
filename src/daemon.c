@@ -419,6 +419,24 @@ static void reopen_existing_logs(void)
     }
 }
 
+static void *fd_scanner_thread(void *arg)
+{
+    (void)arg;
+    while (!stop_flag) {
+        pthread_mutex_lock(&ports_mu);
+        uint32_t cnt = target_count;
+        char devs[MAX_PORTS][256];
+        for (uint32_t i=0;i<cnt;i++) snprintf(devs[i], sizeof(devs[i]), "%s", ports[i]);
+        pthread_mutex_unlock(&ports_mu);
+        for (uint32_t i=0;i<cnt;i++) {
+            if (devs[i][0] != '\0') scan_existing_fds(devs[i], i);
+        }
+        struct timespec req = { .tv_sec = 0, .tv_nsec = 500*1000*1000 }; // 500ms
+        nanosleep(&req, NULL);
+    }
+    return NULL;
+}
+
 static void scan_existing_fds(const char *devpath, uint32_t port_idx)
 {
     DIR *proc_dir = opendir("/proc");
@@ -920,6 +938,12 @@ int main(int argc, char **argv)
     //     fprintf(stderr, "Systemd notification sent successfully\n");
     // }
 
+    // Start background FD scanner to catch already-open FDs continuously
+    pthread_t scan_thr;
+    if (pthread_create(&scan_thr, NULL, fd_scanner_thread, NULL) != 0) {
+        fprintf(stderr, "Warning: failed to start fd scanner thread: %s\n", strerror(errno));
+    }
+
     fprintf(stderr, "Starting main event loop...\n");
     int loop_count = 0;
     while (!stop_flag) {
@@ -948,7 +972,9 @@ int main(int argc, char **argv)
 
     stop_flag = 1;
     pthread_kill(http_thr, SIGINT);
+    pthread_kill(scan_thr, SIGINT);
     pthread_join(http_thr, NULL);
+    pthread_join(scan_thr, NULL);
 
     ring_buffer__free(g_rb);
     sniffer_bpf__destroy(g_skel);
