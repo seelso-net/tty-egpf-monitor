@@ -1,37 +1,37 @@
 Package: tty-egpf-monitor-cli
 Architecture: amd64
-Version: 0.4.49-1
+Version: 0.4.50-1
 Priority: optional
 Section: utils
 Source: tty-egpf-monitor
 Maintainer: Adrian <adrian@example.com>
 Installed-Size: 23
 Depends: libc6 (>= 2.34)
-Filename: pool/jammy/tty-egpf-monitor-cli_0.4.49-1_amd64~jammy.deb
-Size: 4924
-MD5sum: baac07fa78cc8a1d23361256f83f281c
-SHA1: eb308098e75d7b2fdf7e25cd6bcf027538f81657
-SHA256: fbf201cd1701997d461d19bfc20121d445694f6a76c6517ae9fc6b81cf267d9d
-SHA512: 3ef21e510f365bf2bf38463d77d5626fcc6fbf7e6d9f6efc6c97f9ad43ba213b9ee53b8c060c720de8e675cebb1e31868050a03b99d4e52daf1aff51dc45b1da
+Filename: pool/jammy/tty-egpf-monitor-cli_0.4.50-1_amd64~jammy.deb
+Size: 4928
+MD5sum: aaaa295c97641b13946bf9a9fcf7bae0
+SHA1: 7b07fd44ea62463e3623d39dff45a98cd8b532ab
+SHA256: d18025943dd3262d7b7b41725ee8cf18b8322cdc028668b919f02875d0e20400
+SHA512: ac3b683e25d5114da321293654ee9f3a5f9d1263462256bec3a4fe9181c73742530a1dc8d2a3da6bc568f027b63d0f28798506c63e449406eca50ae588813fc5
 Description: CLI for tty-egpf-monitord HTTP API
  Lightweight command line client to manage the local daemon and list/add
  monitored ports, suitable for container environments.
 
 Package: tty-egpf-monitord
 Architecture: amd64
-Version: 0.4.49-1
+Version: 0.4.50-1
 Priority: optional
 Section: utils
 Source: tty-egpf-monitor
 Maintainer: Adrian <adrian@example.com>
 Installed-Size: 791
 Depends: libc6 (>= 2.34), libelf1 (>= 0.144), zlib1g (>= 1:1.2.3.3), adduser, libcap2-bin, libsystemd0
-Filename: pool/jammy/tty-egpf-monitord_0.4.49-1_amd64~jammy.deb
-Size: 211136
-MD5sum: 888babd9d453518e0a266a8c586cf4d5
-SHA1: 56e048eca540a1508dbb2165a39bf30e4d92c827
-SHA256: dc1afec00c55d9133d981f4410bbd7052891b2bc8b4541c23c23afc2a2307274
-SHA512: 78514c2fc95c5a197acfd750bf8b37dca57cd4cd14d2ddff6478770eecf0eddc2af42eca276dc0265a919149f1590bb242bb24085c614c82a7022d347f2bb01c
+Filename: pool/jammy/tty-egpf-monitord_0.4.50-1_amd64~jammy.deb
+Size: 211296
+MD5sum: 524499b3433ada324563e5ad20ee6997
+SHA1: 21abdc558584b12850bac0e71f7f6dfb705e67d5
+SHA256: b3c586319f97d586b365de1489bac1f6f19976c67bca6c781c158befebfa8701
+SHA512: fe0d9c4c625bc061ddf29f4bf080bf530b95c94f86834875a573557163958077ed4f0dddd3813bae1ce80ce5d4615b19c677f6d6f535fcf471b827658114be78
 Description: eBPF serial monitoring daemon with HTTP API
  A sophisticated real-time serial port monitoring tool that combines
  the power of eBPF (extended Berkeley Packet Filter) with intelligent
