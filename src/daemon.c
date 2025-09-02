@@ -404,15 +404,31 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     
     // Read all output from lsof, including any error messages
     int line_count = 0;
+    int header_found = 0;
     while (fgets(line, sizeof(line), lsof)) {
         line_count++;
         fprintf(stderr, "DEBUG: lsof output line %d: %s", line_count, line);
         
-        // Skip header line (first line)
-        if (line_count == 1) {
+        // Skip warning lines that start with "lsof:" or contain "Output information may be incomplete"
+        if (strstr(line, "lsof:") || strstr(line, "Output information may be incomplete")) {
+            fprintf(stderr, "DEBUG: Skipping warning line: %s", line);
             continue;
         }
-        fprintf(stderr, "DEBUG: lsof line: %s", line);
+        
+        // Check if this is the header line (contains "COMMAND PID USER")
+        if (strstr(line, "COMMAND") && strstr(line, "PID") && strstr(line, "USER")) {
+            fprintf(stderr, "DEBUG: Found header line: %s", line);
+            header_found = 1;
+            continue;
+        }
+        
+        // Only process data lines after we've found the header
+        if (!header_found) {
+            fprintf(stderr, "DEBUG: Skipping line before header: %s", line);
+            continue;
+        }
+        
+        fprintf(stderr, "DEBUG: Processing data line: %s", line);
         
         // Parse lsof output: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
         char command[64], user[64], fd_str[32], type[16], device[32], size[32], node[32], name[256];
@@ -458,8 +474,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     
     pclose(lsof);
     
-    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: processed %d lines, found %d matches\n", 
-            devpath, line_count, matches_found);
+    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: processed %d lines, header_found=%d, found %d matches\n", 
+            devpath, line_count, header_found, matches_found);
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)
