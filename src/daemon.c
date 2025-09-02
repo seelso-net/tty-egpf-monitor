@@ -388,14 +388,18 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
         return;
     }
     
-    snprintf(cmd, sizeof(cmd), "%s %s 2>&1", lsof_cmd, devpath);
+    snprintf(cmd, sizeof(cmd), "%s %s", lsof_cmd, devpath);
     fprintf(stderr, "DEBUG: Using lsof command: %s\n", lsof_cmd);
+    fprintf(stderr, "DEBUG: Full command: %s\n", cmd);
     
     FILE *lsof = popen(cmd, "r");
     if (!lsof) {
         fprintf(stderr, "DEBUG: Failed to run lsof command: %s\n", strerror(errno));
         return;
     }
+    
+    // Set line buffering to ensure we get output immediately
+    setvbuf(lsof, NULL, _IOLBF, 0);
     
     char line[512];
     int matches_found = 0;
@@ -443,22 +447,22 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
             if (sscanf(fd_str, "%d", &fd) == 1 && fd >= 0) {
                 matches_found++;
                 
-                struct fdkey k = { .tgid = tgid, .fd = fd };
-                uint8_t one = 1;
-                
+                    struct fdkey k = { .tgid = tgid, .fd = fd };
+                    uint8_t one = 1;
+                    
                 fprintf(stderr, "DEBUG: Found matching fd %d in process %u (%s) for %s\n", 
                         fd, tgid, command, devpath);
                 
-                int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
-                int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
-                
-                if (fd_interest_fd >= 0) {
+                    int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
+                    int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
+                    
+                    if (fd_interest_fd >= 0) {
                     int rc = bpf_map_update_elem(fd_interest_fd, &k, &one, BPF_ANY);
                     if (rc) fprintf(stderr, "ERROR: fd_interest update failed pid=%u fd=%d: %s\n", tgid, fd, strerror(errno));
                 } else {
                     fprintf(stderr, "ERROR: fd_interest map fd invalid\n");
-                }
-                if (fd_portidx_fd >= 0) {
+                    }
+                    if (fd_portidx_fd >= 0) {
                     int rc2 = bpf_map_update_elem(fd_portidx_fd, &k, &port_idx, BPF_ANY);
                     if (rc2) fprintf(stderr, "ERROR: fd_portidx update failed pid=%u fd=%d idx=%u: %s\n", tgid, fd, port_idx, strerror(errno));
                 } else {
@@ -472,7 +476,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
         }
     }
     
-    pclose(lsof);
+    int exit_status = pclose(lsof);
+    fprintf(stderr, "DEBUG: lsof process exited with status: %d\n", exit_status);
     
     fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: processed %d lines, header_found=%d, found %d matches\n", 
             devpath, line_count, header_found, matches_found);
@@ -839,7 +844,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "2. BPF skeleton ABI incompatibility\n");
         fprintf(stderr, "3. Missing or incompatible bpftool version\n");
         fprintf(stderr, "\nPlease ensure the runtime environment has compatible libbpf/bpftool versions.\n");
-        return 1;
+        return 1; 
     }
     
     fprintf(stderr, "BPF skeleton opened successfully\n");
