@@ -346,6 +346,111 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     return 0;
 }
 
+/* ---------- Fallback: syscall-specific openat hooks (jammy-friendly) ---------- */
+SEC("tracepoint/syscalls/sys_enter_openat")
+int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
+{
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    const char *filename = NULL;
+    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    __u32 k0 = 0;
+    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+    if (!sg)
+        return 0;
+    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
+    if (glen <= 0)
+        return 0;
+
+    __s32 matched_idx = -1;
+#pragma unroll
+    for (int i = 0; i < MAX_TARGETS; i++) {
+        struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+        if (!sw) break;
+        __u32 ki = i;
+        struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+        if (!tpv) continue;
+        bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+        if (sw->path[0] == '\0') continue;
+        if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+    }
+    if (matched_idx >= 0) {
+        __u32 midx = (unsigned)matched_idx;
+        bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
+    }
+    return 0;
+}
+
+SEC("tracepoint/syscalls/sys_enter_openat2")
+int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
+{
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    const char *filename = NULL;
+    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    __u32 k0 = 0;
+    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+    if (!sg)
+        return 0;
+    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
+    if (glen <= 0)
+        return 0;
+
+    __s32 matched_idx = -1;
+#pragma unroll
+    for (int i = 0; i < MAX_TARGETS; i++) {
+        struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+        if (!sw) break;
+        __u32 ki = i;
+        struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+        if (!tpv) continue;
+        bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+        if (sw->path[0] == '\0') continue;
+        if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+    }
+    if (matched_idx >= 0) {
+        __u32 midx = (unsigned)matched_idx;
+        bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
+    }
+    return 0;
+}
+
+SEC("tracepoint/syscalls/sys_exit_openat")
+int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
+{
+    __s64 ret = 0; bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    if (ret < 0)
+        return 0;
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
+    if (!idxp)
+        return 0;
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
+    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+    bpf_map_delete_elem(&pending_open_idx, &tgid);
+    return 0;
+}
+
+SEC("tracepoint/syscalls/sys_exit_openat2")
+int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
+{
+    __s64 ret = 0; bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    if (ret < 0)
+        return 0;
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
+    if (!idxp)
+        return 0;
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
+    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+    bpf_map_delete_elem(&pending_open_idx, &tgid);
+    return 0;
+}
+
 /* (no fallback syscalls openat hooks; raw_syscalls handles open mapping) */
 
 /* LSM hook removed in favor of userspace mapping */
