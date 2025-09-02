@@ -928,6 +928,60 @@ int main(int argc, char **argv)
         return 1; 
     }
 
+    // DEBUG: Check individual program attachments
+    fprintf(stderr, "DEBUG: Checking individual BPF program attachments...\n");
+    
+    // Check if programs are actually attached
+    if (g_skel->progs.tp_raw_sys_enter) {
+        fprintf(stderr, "DEBUG: tp_raw_sys_enter program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_raw_sys_enter program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_raw_sys_exit) {
+        fprintf(stderr, "DEBUG: tp_raw_sys_exit program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_raw_sys_exit program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_enter_close) {
+        fprintf(stderr, "DEBUG: tp_enter_close program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_close program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_exit_close) {
+        fprintf(stderr, "DEBUG: tp_exit_close program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_exit_close program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_enter_write) {
+        fprintf(stderr, "DEBUG: tp_enter_write program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_write program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_enter_read) {
+        fprintf(stderr, "DEBUG: tp_enter_read program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_read program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_exit_read) {
+        fprintf(stderr, "DEBUG: tp_exit_read program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_exit_read program not found in skeleton\n");
+    }
+    
+    if (g_skel->progs.tp_enter_ioctl) {
+        fprintf(stderr, "DEBUG: tp_enter_ioctl program found in skeleton\n");
+    } else {
+        fprintf(stderr, "ERROR: tp_enter_ioctl program not found in skeleton\n");
+    }
+    
+    fprintf(stderr, "DEBUG: Individual BPF program attachment check completed\n");
+
     // Reopen log files for already configured ports
     reopen_existing_logs();
 
