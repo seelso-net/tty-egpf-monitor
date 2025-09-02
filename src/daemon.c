@@ -33,6 +33,8 @@
 struct fdkey { uint32_t tgid; int32_t fd; };
 
 #define MAX_PORTS 16
+// Must match MAX_DATA in sniffer.bpf.c
+#define MAX_DATA 256
 #define MAX_PATH 256
 struct pathval { char path[MAX_PATH]; };
 
@@ -216,23 +218,50 @@ static int check_runtime_compatibility(void)
 
 static void log_event_json(const struct event *e)
 {
+    // CRITICAL: Add robust error checking to prevent daemon crashes
+    if (!e) {
+        fprintf(stderr, "ERROR: log_event_json called with NULL event\n");
+        return;
+    }
+    
     uint32_t idx = e->port_idx;
-    if (idx >= MAX_PORTS) return;
+    if (idx >= MAX_PORTS) {
+        fprintf(stderr, "ERROR: Invalid port_idx=%u >= MAX_PORTS=%d\n", idx, MAX_PORTS);
+        return;
+    }
+    
     FILE *f = port_logs[idx];
     if (!f) {
         fprintf(stderr, "DEBUG: No log file for port_idx=%u\n", idx);
         return;
     }
+    
+    // Validate event type to prevent array access issues
+    if (e->type < 1 || e->type > 5) {
+        fprintf(stderr, "ERROR: Invalid event type=%d\n", e->type);
+        return;
+    }
+    
     struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
     const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
     fprintf(f,
         "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"%s\",\"pid\":%u,\"tgid\":%u,\"comm\":\"%.*s\",\"port_idx\":%u",
         (uint64_t)ts.tv_sec, ts.tv_nsec, etype, e->pid, e->tgid, 16, e->comm, idx);
+        
     if (e->type == 3 || e->type == 4) {
-        fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":\"",
-                e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
-        for (unsigned i=0;i<e->data_len;i++) fprintf(f, "%02x", e->data[i]);
-        fprintf(f, "\"");
+        // CRITICAL: Validate data_len to prevent buffer overrun crashes
+        if (e->data_len > MAX_DATA) {
+            fprintf(stderr, "ERROR: Invalid data_len=%u > MAX_DATA=%d\n", e->data_len, MAX_DATA);
+            fprintf(f, ",\"error\":\"data_len_invalid\"");
+        } else {
+            fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":\"",
+                    e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
+            // Safe data output with bounds checking
+            for (unsigned i = 0; i < e->data_len && i < MAX_DATA; i++) {
+                fprintf(f, "%02x", e->data[i]);
+            }
+            fprintf(f, "\"");
+        }
     } else if (e->type == 5) {
         fprintf(f, ",\"cmd\":%u", e->cmd);
     }
