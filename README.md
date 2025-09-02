@@ -84,6 +84,13 @@ For containerized environments, see the [Docker section in INSTALLATION.md](INST
 - **Repository**: GitHub Pages-hosted APT repository
 - **Signing**: GPG-signed packages for security
 - **Supported**: Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble)
+
+## 🚀 **NEW: Ubuntu 22.04 Compatibility**
+
+**v0.4.59+ includes automatic libbpf compatibility fixes:**
+- ✅ **Ubuntu 22.04 (jammy)**: Auto-upgrades libbpf to 1.6.2+ during installation
+- ✅ **Ubuntu 24.04 (noble)**: Uses native libbpf 1.7.0+
+- ✅ **Zero manual intervention** - works out-of-the-box on all supported Ubuntu versions
 - **Architecture**: x86_64 (amd64)
 
 **Defaults**:
