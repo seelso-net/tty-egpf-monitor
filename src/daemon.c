@@ -369,7 +369,7 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     // Alternative approach: use lsof to find processes with the device open
     // This avoids permission issues with /proc/*/fd/ directories
     char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "lsof %s 2>/dev/null | awk 'NR>1 {print $2, $4}' | grep -E '^[0-9]+ [0-9]+[rw]?$'", devpath);
+    snprintf(cmd, sizeof(cmd), "lsof %s 2>/dev/null", devpath);
     
     FILE *lsof = popen(cmd, "r");
     if (!lsof) {
@@ -377,16 +377,28 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
         return;
     }
     
-    char line[256];
+    char line[512];
     int matches_found = 0;
     
     fprintf(stderr, "DEBUG: Running lsof command: %s\n", cmd);
     
+    // Skip header line
+    if (fgets(line, sizeof(line), lsof)) {
+        fprintf(stderr, "DEBUG: lsof header: %s", line);
+    }
+    
     while (fgets(line, sizeof(line), lsof)) {
+        fprintf(stderr, "DEBUG: lsof line: %s", line);
+        
+        // Parse lsof output: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+        char command[64], user[64], fd_str[32], type[16], device[32], size[32], node[32], name[256];
         uint32_t tgid;
-        char fd_str[32];
-        if (sscanf(line, "%u %31s", &tgid, fd_str) == 2) {
-            // Extract numeric part of fd (remove r/w suffix if present)
+        
+        int parsed = sscanf(line, "%63s %u %63s %31s %15s %31s %31s %31s %255s",
+                           command, &tgid, user, fd_str, type, device, size, node, name);
+        
+        if (parsed >= 4) {
+            // Extract numeric part of fd (remove r/w/u suffix if present)
             int fd = -1;
             if (sscanf(fd_str, "%d", &fd) == 1 && fd >= 0) {
                 matches_found++;
@@ -394,8 +406,8 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                 struct fdkey k = { .tgid = tgid, .fd = fd };
                 uint8_t one = 1;
                 
-                fprintf(stderr, "DEBUG: Found matching fd %d in process %u for %s\n", 
-                        fd, tgid, devpath);
+                fprintf(stderr, "DEBUG: Found matching fd %d in process %u (%s) for %s\n", 
+                        fd, tgid, command, devpath);
                 
                 int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
                 int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
@@ -412,7 +424,11 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                 } else {
                     fprintf(stderr, "ERROR: fd_portidx map fd invalid\n");
                 }
+            } else {
+                fprintf(stderr, "DEBUG: Skipping non-numeric fd: %s\n", fd_str);
             }
+        } else {
+            fprintf(stderr, "DEBUG: Failed to parse lsof line (parsed %d fields): %s", parsed, line);
         }
     }
     
