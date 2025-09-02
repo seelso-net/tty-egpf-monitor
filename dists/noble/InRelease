@@ -4,38 +4,38 @@ Hash: SHA512
 Architectures: amd64
 Codename: noble
 Components: main
-Date: Tue, 02 Sep 2025 15:52:00 +0000
+Date: Tue, 02 Sep 2025 16:00:32 +0000
 Label: tty-egpf-monitor
 Suite: noble
 MD5Sum:
- b87d3f30fb754fbc81acfb8f1419e9e7              129 Release
- 1776ca6d631c9c4627a9f32c680451ce             2064 main/binary-amd64/Packages
- 47ce5b64b971c706921e32c1d3f59d8b             1114 main/binary-amd64/Packages.gz
+ 7ff0b80da50810aaa26d9631c623b529              129 Release
+ b898ccb2ebbeb8082cacda75d8f7562a             2064 main/binary-amd64/Packages
+ 386621a7cc489e2990eac66939c528e7             1117 main/binary-amd64/Packages.gz
 SHA1:
- e610dbf4e28aded17df00d3852314d774bd68dd4              129 Release
- 8a2924b7056a72018f0e9ed9ccc8fbb6d013db4d             2064 main/binary-amd64/Packages
- f4b22e1642ae159470be08ada1d02e5aa5747f79             1114 main/binary-amd64/Packages.gz
+ 4ebffd15d82f68f93b3ec6f3a9a50c1dee229019              129 Release
+ daf1f5af8a5a8b6bb1105b670493a283461ef9f8             2064 main/binary-amd64/Packages
+ d60cb3f823ee814450819a6d4a2890bf0008d2cb             1117 main/binary-amd64/Packages.gz
 SHA256:
- 1db1bf668076cf19db96f646f36e57389bb3f3c7defb97d694e6ed4b3330a0de              129 Release
- 24baf8d96bb871acf858556c8d9c3fdee372022be01a870ea2c0f5f41bfb0d37             2064 main/binary-amd64/Packages
- ae51be86fb4b8719a69e751268bc293a58d3ada1e70fe7bfd01239a63b1efabb             1114 main/binary-amd64/Packages.gz
+ bf01645d924e99cdadfb1322b8a0d00df51fd6ba0431867d2ebb1d977122b3cb              129 Release
+ 2727b96ab06465262f71fdc36c3fdf9a45415992bdbdc2df0c524d812c3f1497             2064 main/binary-amd64/Packages
+ db75a37afae3d454102764c1812e4266b7b1240b389a6a28fec2e373a8431edd             1117 main/binary-amd64/Packages.gz
 SHA512:
- 6c18b640b56cffdfe623acb9640764b3a8a872aad86dfd6b5b782cfd7da6c5d5fb81e6ae8a5c36092e856323d8396944f45c4c808461bc59813330c3cbbf0c81              129 Release
- df3e1e994b5d1e86b651b3d7fda143aa56e23714409d82fd2db68cfb611e198260d1e0c4ea03d9532ae69c79b140e0f3c3adb6f3a7299ab39622a643d59d5b3e             2064 main/binary-amd64/Packages
- 9e0fdff7f443ae6cff4b71215493523ab295cf69966385c0c44c1c9f5ebc1f6b48b028d7dbb4fc52459453799219c194977e8c6cf862eafe85db6bb4ae33ae71             1114 main/binary-amd64/Packages.gz
+ f2b67eabc0c3c913d04a237607ec9a9a7ebc32480e236ecd70a3c4dbeac172cfcbacef4dac5e4c9528f0135d8b97d231f514655b7f1fa86ed1eed9c17f689818              129 Release
+ 7bf29c15e02da847a96477254f85adb4e91fb6efd157b9b2afff3ffef9a6a06508645a479067261848adc2caf242551fd438f573acf6c9da5f7be831f0f77a36             2064 main/binary-amd64/Packages
+ 6ccce57cb329c5fad943d8f38fae01dbfe98a01de3c4843fe0c3e78a2e4ad1f340ec093fcceed19be2aec720bf2b191a71c520a40b5bb33000da0c4a2eea7791             1117 main/binary-amd64/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEEORPNzRUsY0/k5JQx3d9V9ArSFS8FAmi3EqEACgkQ3d9V9ArS
-FS9z3xAAtkMFE10rlBL6XZ4VUsyjno/sfRDtrIIooRHFJTt6S6sEbTHfGYC8sLNk
-CC8gf7gkBNNoUfELFwidAAk8rve8G3IdgQeHI5dWzmWbn4VKlT5IZOKjDllP+wNe
-xRmUu8/KRQ8PRa2GPVuF9s6yG5HHSLN5yKZH6LRYqKUFfmkDgbR+vI9RardsrQEr
-dDKDAhgCDCXX2I9buvXcjW1Ij+UnhdLaJcMO4YRKvgMz57axFuT0a4l/8oY0WRQS
-sVUY/m7uoQLVG5ShPIUw+4wd4YIXGLvyzRNW+QYPfW2VLUH+hWMD6mEUp/uYapWz
-L9qlJt+3ti+tGreWrbCkyZns3HuPrHhw69MHYVvHnLCuBDXBDX8Mf4xYB96kJxfP
-WvRzCsXs+6D2KQ3JzUF7rYiBqM6pyXdzlWg7aAF/ccz25hPjVbNmNYBTT6PJSoNR
-kYdqPV0+fdftNLGgfo6HLOBgxJLHcFSgN/uEiRFU7cL/DC92SMhrizBJnndaSK3z
-MvL3ds3pk6V58ZRHdCAXxPtHVV+/sLSUgW+XBoLzCCHS0lt8kqXYKg/TNsaFM0fM
-yE5vEaylZ9fp83+Ovi3RScpOy4EbxUbFS3UCnzwTqQfgjTNP+NbgYvZceirkZrhH
-aEQX2Y94wdutpcUeiuGdDJOh46oE+6rRMbDNKOUyIr1p+W3vSQk=
-=iRAO
+iQIzBAEBCgAdFiEEORPNzRUsY0/k5JQx3d9V9ArSFS8FAmi3FKEACgkQ3d9V9ArS
+FS96KQ//TUhvx/VYBeYp/2MPfNe0MGWRvOF+HiW0SlJclGeUcp6U/DOp3rB7HWfD
+bFnYjHZ+FsCjHtZjLoETdV1PQrB8uw+AJ+VJgCdljAEGD8irSKC9foHRwHuqxVUE
+azUV0oTzhM17Su3Po45LSJmfNeVhHwQboaiBkwzkh4YKrNk845aGsKtO1hUoKf0O
+FhIV+73j72jx+eVCIo8rv/qX38o6cC48t2SryzU5Cle4UJAO2hSgedbk7a2xWzVf
+50lKB6ASQdW8CPjU+yygrLfBHnncGPzyfpX14fU8LNzxP+BGiQHC2ybnXYBH7pco
+Qxo9RTptWM7aQ7HxoFBT1g0Y8/bF0QGVmAISHKiEind0+Y8szxMduOpBr3mdUqn6
+Ug0jrngB+3+WOCFo512BLD5elBbKMBuTvj6e+WJmJNQkQoYpbfI8Uynutb8lVSpQ
+hI0nsRHbaWGUjHoLzIWQP4ZKAAkP3fN+JZqEOEdLrt5Ipz4JKwyHimkBm+6LvfSg
+svDQZbTEZHyBB5gZwYjvXQASZij3TDIuhLOsJ/d3bcswu0AWN/NeksAhlJy+esAO
+gFy2uSlnM1hd4JwEPCE7M/3Wu/L4A6fBn2RqyxspI5wi4cWZ/JCnhRekNBSvA/sk
+DBI1fAGX3q68IUTQvk4/EFDzfmFtKdAZG2nO3BYlxarPzGQ/2I0=
+=/wfv
 -----END PGP SIGNATURE-----
