@@ -87,11 +87,11 @@ For containerized environments, see the [Docker section in INSTALLATION.md](INST
 
 ## 🚀 **NEW: Ubuntu 22.04 Compatibility**
 
-**v0.4.59+ includes automatic libbpf compatibility fixes:**
-- ✅ **Ubuntu 22.04 (jammy)**: Auto-upgrades libbpf to 1.6.2+ during installation
+**v0.4.61+ includes automatic libbpf compatibility fixes:**
+- ✅ **Ubuntu 22.04 (jammy)**: **Auto-upgrades system libbpf from 0.5.0 to 1.6.2+** during package installation
 - ✅ **Ubuntu 24.04 (noble)**: Uses native libbpf 1.7.0+
 - ✅ **Zero manual intervention** - works out-of-the-box on all supported Ubuntu versions
-- **Architecture**: x86_64 (amd64)
+- ✅ **Fixes BPF tracepoint attachment** issues that prevented event capture
 
 **Defaults**:
 - Socket: `/run/tty-egpf-monitord.sock`
