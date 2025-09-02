@@ -123,7 +123,19 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(valu
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u32); __uint(max_entries, 32768); } pending_open_idx SEC(".maps");
 
 /* Debug counters for open mapping */
-struct dbg_open_vals { __u64 enter_matches; __u64 exit_mapped; __u32 last_tgid; __s32 last_fd; __u32 last_idx; };
+struct dbg_open_vals {
+    __u64 enter_seen_raw;
+    __u64 enter_seen_tp;
+    __u64 read_fail;
+    __u64 enter_matches;
+    __u64 no_match;
+    __u64 exit_seen_raw;
+    __u64 exit_seen_tp;
+    __u64 exit_mapped;
+    __u32 last_tgid;
+    __s32 last_fd;
+    __u32 last_idx;
+};
 struct { __uint(type, BPF_MAP_TYPE_ARRAY); __type(key, __u32); __type(value, struct dbg_open_vals); __uint(max_entries, 1); } dbg_open SEC(".maps");
 
 /* (removed device-id maps; using path matching only) */
@@ -167,6 +179,8 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
 
     if (id == __NR_openat || id == __NR_openat2) {
         /* Capture filename and try to match now; store matched index for exit */
+        __u32 dkey = 0; struct dbg_open_vals *dv_enter = bpf_map_lookup_elem(&dbg_open, &dkey);
+        if (dv_enter) dv_enter->enter_seen_raw += 1;
         const char *filename = NULL;
         bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
         __u32 k0 = 0;
@@ -174,8 +188,10 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         if (!sg)
             return 0;
         int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
-        if (glen <= 0)
+        if (glen <= 0) {
+            if (dv_enter) dv_enter->read_fail += 1;
             return 0;
+        }
 
         __s32 matched_idx = -1;
 #pragma unroll
@@ -193,9 +209,9 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
             __u32 midx = (unsigned)matched_idx;
             bpf_printk("open-enter raw: tgid=%u match idx=%u\n", tgid, midx);
             bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
-            __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
-            if (dv) { dv->enter_matches += 1; dv->last_tgid = tgid; dv->last_idx = midx; }
+            if (dv_enter) { dv_enter->enter_matches += 1; dv_enter->last_tgid = tgid; dv_enter->last_idx = midx; }
         }
+        else if (dv_enter) { dv_enter->no_match += 1; }
         return 0;
     }
 
@@ -305,8 +321,8 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
                 if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
                 bpf_printk("open-exit raw: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
-                __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
-                if (dv) { dv->exit_mapped += 1; dv->last_fd = (__s32)ret; }
+                __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
+                if (dv2) { dv2->exit_seen_raw += 1; dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; }
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         } else {
