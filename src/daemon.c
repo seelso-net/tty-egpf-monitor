@@ -375,25 +375,38 @@ static void reopen_existing_logs(void)
 static void *fd_scanner_thread(void *arg)
 {
     (void)arg;
+    fprintf(stderr, "DEBUG: FD scanner thread started\n");
+    int scan_count = 0;
     while (!stop_flag) {
         pthread_mutex_lock(&ports_mu);
         uint32_t cnt = target_count;
         char devs[MAX_PORTS][256];
         for (uint32_t i=0;i<cnt;i++) snprintf(devs[i], sizeof(devs[i]), "%s", ports[i]);
         pthread_mutex_unlock(&ports_mu);
-        for (uint32_t i=0;i<cnt;i++) {
-            if (devs[i][0] != '\0') scan_existing_fds(devs[i], i);
+        
+        if (cnt > 0) {
+            scan_count++;
+            fprintf(stderr, "DEBUG: FD scanner running scan #%d for %u devices\n", scan_count, cnt);
+            for (uint32_t i=0;i<cnt;i++) {
+                if (devs[i][0] != '\0') scan_existing_fds(devs[i], i);
+            }
         }
-        struct timespec req = { .tv_sec = 0, .tv_nsec = 500*1000*1000 }; // 500ms
+        
+        // Sleep for 5 seconds between scans instead of 500ms to reduce CPU usage
+        struct timespec req = { .tv_sec = 5, .tv_nsec = 0 }; // 5 seconds
+        fprintf(stderr, "DEBUG: FD scanner sleeping for 5 seconds...\n");
         nanosleep(&req, NULL);
     }
+    fprintf(stderr, "DEBUG: FD scanner thread exiting\n");
     return NULL;
 }
 
 static void scan_existing_fds(const char *devpath, uint32_t port_idx)
 {
-    fprintf(stderr, "DEBUG: scan_existing_fds called for devpath='%s' (len=%zu), port_idx=%u\n", 
-            devpath, strlen(devpath), port_idx);
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    fprintf(stderr, "DEBUG: [%ld.%09ld] scan_existing_fds called for devpath='%s' (len=%zu), port_idx=%u\n", 
+            ts.tv_sec, ts.tv_nsec, devpath, strlen(devpath), port_idx);
     
     // Alternative approach: use lsof to find processes with the device open
     // This avoids permission issues with /proc/*/fd/ directories
