@@ -1021,8 +1021,9 @@ int main(int argc, char **argv)
     while (!stop_flag) {
         int err = ring_buffer__poll(g_rb, 100); /* 100ms to be responsive to signals */
         if (err == -EINTR) {
-            fprintf(stderr, "Ring buffer poll interrupted\n");
-            break;
+            fprintf(stderr, "Ring buffer poll interrupted - restarting poll loop\n");
+            // Don't exit on EINTR, just continue polling
+            continue;
         }
         if (err == -EAGAIN) {
             /* No events available, this is normal */
@@ -1033,8 +1034,9 @@ int main(int argc, char **argv)
             continue;
         }
         if (err < 0) {
-            fprintf(stderr, "Ring buffer poll error: %d (%s)\n", err, strerror(-err));
-            break;
+            fprintf(stderr, "Ring buffer poll error: %d (%s) - restarting poll loop\n", err, strerror(-err));
+            // Don't exit on poll errors, just continue
+            continue;
         }
         if (err > 0) {
             fprintf(stderr, "Processed %d events\n", err);
