@@ -343,7 +343,9 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
-        size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+        /* Clamp ret to unsigned bounded size for copy */
+        __u64 uret = ( __u64)ret;
+        __u32 cap = uret > MAX_DATA ? MAX_DATA : ( __u32)uret;
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (!e) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         fill_common(e, EV_READ);
@@ -362,7 +364,8 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
-        size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+        __u64 uret2 = ( __u64)ret;
+        __u32 cap = uret2 > MAX_DATA ? MAX_DATA : ( __u32)uret2;
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (!e) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         fill_common(e, EV_READ);
