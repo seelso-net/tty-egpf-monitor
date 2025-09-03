@@ -456,21 +456,52 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 {
-    __s64 ret = 0; bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
-    if (ret < 0)
+    __s64 ret = 0; 
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    
+    // CRITICAL: Never generate events for failed opens
+    if (ret < 0) {
+        // Clean up any pending state for failed opens
+        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+        bpf_map_delete_elem(&pending_open_idx, &tgid);
         return 0;
+    }
+    
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
-    if (!idxp)
+    if (!idxp) {
         return 0;
-    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    }
+    
+    struct fdkey k; 
+    k.tgid = tgid; 
+    k.fd = (__s32)ret; 
+    __u8 one = 1; 
+    __u32 midx = *idxp;
+    
+    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    
+    // Only generate OPEN event for successful opens
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-    if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
-    bpf_printk("open-exit tp: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
-    __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
-    if (dv) { dv->exit_mapped += 1; dv->last_fd = (__s32)ret; }
+    if (e) { 
+        fill_common(e, EV_OPEN); 
+        e->cmd=0; 
+        e->ret=ret; 
+        e->dir=0; 
+        e->port_idx=midx; 
+        e->data_len=0; 
+        e->data_trunc=0; 
+        bpf_ringbuf_submit(e, 0); 
+    }
+    
+    bpf_printk("open-exit tp: tgid=%u fd=%d idx=%u ret=%lld\n", tgid, (__s32)ret, midx, ret);
+    __u32 dkey = 0; 
+    struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
+    if (dv) { 
+        dv->exit_mapped += 1; 
+        dv->last_fd = (__s32)ret; 
+    }
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
@@ -478,18 +509,45 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 SEC("tracepoint/syscalls/sys_exit_openat2")
 int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
 {
-    __s64 ret = 0; bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
-    if (ret < 0)
+    __s64 ret = 0; 
+    bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    
+    // CRITICAL: Never generate events for failed opens
+    if (ret < 0) {
+        // Clean up any pending state for failed opens
+        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+        bpf_map_delete_elem(&pending_open_idx, &tgid);
         return 0;
+    }
+    
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
-    if (!idxp)
+    if (!idxp) {
         return 0;
-    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
+    }
+    
+    struct fdkey k; 
+    k.tgid = tgid; 
+    k.fd = (__s32)ret; 
+    __u8 one = 1; 
+    __u32 midx = *idxp;
+    
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-    if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
+    
+    // Only generate OPEN event for successful opens
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (e) { 
+        fill_common(e, EV_OPEN); 
+        e->cmd=0; 
+        e->ret=ret; 
+        e->dir=0; 
+        e->port_idx=midx; 
+        e->data_len=0; 
+        e->data_trunc=0; 
+        bpf_ringbuf_submit(e, 0); 
+    }
+    
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }

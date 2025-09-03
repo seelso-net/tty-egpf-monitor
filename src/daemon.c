@@ -302,8 +302,9 @@ static bool should_ignore_event(const struct event *e) {
     // 1 = OPEN, 2 = CLOSE, 3 = READ, 4 = WRITE, 5 = IOCTL
     
     if (e->type == 1 || e->type == 2) {  // OPEN or CLOSE events
-        // Only process OPEN/CLOSE for real applications (not system tools)
-        return !is_real_application(e);
+        // Don't filter OPEN/CLOSE here - we handle them separately for mode switching
+        // and apply logging filters later
+        return false;
     }
     
     if (e->type == 3 || e->type == 4) {  // READ or WRITE events
@@ -413,7 +414,7 @@ static void enter_active_mode(uint32_t port_idx) {
     if (port_idx >= MAX_PORTS || ports[port_idx][0] == '\0') return;
     
     // Try to open the port for active reading
-    active_fds[port_idx] = open(ports[port_idx], O_RDONLY | O_NOCTTY | O_NONBLOCK);
+            active_fds[port_idx] = open(ports[port_idx], O_RDONLY | O_NOCTTY | O_NONBLOCK | O_EXCL);
     if (active_fds[port_idx] >= 0) {
         // Configure termios with stored baudrate for this port
         set_termios(active_fds[port_idx], port_baudrates[port_idx], DEFAULT_DATABITS, DEFAULT_PARITY, DEFAULT_STOPBITS, DEFAULT_HWFLOW);
@@ -736,12 +737,14 @@ static int handle_event(void *ctx, void *data, size_t len)
         return 0;  // Skip duplicate events
     }
     
-    // Log only meaningful events
-    log_event_json(e);
-    
-    // Handle port state transitions only for real applications
+    // Handle port state transitions FIRST (for mode switching)
     if (e->type == 1 || e->type == 2) { // OPEN or CLOSE events
         handle_port_state_transition(e->port_idx, e->type, e->tgid, e->comm);
+    }
+    
+    // Only log events that pass our real application filter
+    if (is_real_application(e)) {
+        log_event_json(e);
     }
     
     pthread_mutex_unlock(&ports_mu);
