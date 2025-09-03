@@ -503,20 +503,28 @@ jobs:
         if [ -f "src/Makefile" ]; then
           echo "Makefile found in src/, building from src directory with minimal features..."
           cd src
-          # First try to build the actual binary
-          echo "Building bpftool binary..."
-          make -j$(nproc) 2>&1 | head -30 || true
+          
+          # Try to build with explicit target to ensure binary is created
+          echo "Building bpftool binary with explicit target..."
+          make -j$(nproc) bpftool 2>&1 | head -50 || true
           
           # If that didn't work, try with disabled features
           if [ ! -f "bpftool" ]; then
             echo "Trying build with disabled features..."
-            make -j$(nproc) V=1 DISABLE_LLVM=1 2>&1 | head -30 || true
+            make -j$(nproc) V=1 DISABLE_LLVM=1 bpftool 2>&1 | head -50 || true
           fi
           
           # If still no binary, try with minimal features
           if [ ! -f "bpftool" ]; then
             echo "Trying minimal build..."
-            make -j$(nproc) V=1 FEATURES_DUMP=1 2>&1 | head -30 || true
+            make -j$(nproc) V=1 FEATURES_DUMP=1 bpftool 2>&1 | head -50 || true
+          fi
+          
+          # If still no binary, try clean build
+          if [ ! -f "bpftool" ]; then
+            echo "Trying clean build..."
+            make clean
+            make -j$(nproc) bpftool 2>&1 | head -50 || true
           fi
           
           # Look for the binary in multiple possible locations with better search
