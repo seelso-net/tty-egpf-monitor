@@ -510,20 +510,37 @@ jobs:
           echo "Trying simple build..."
           make -j$(nproc) 2>&1 | head -20 || true
           
-          # Look for the binary in multiple possible locations
+          # Look for the binary in multiple possible locations with better search
+          echo "Searching for bpftool binary after build..."
+          find . -name "bpftool" -type f 2>/dev/null | head -10
+          find .. -name "bpftool" -type f 2>/dev/null | head -10
+          
+          # Check common build output locations
           BPFTOOL_BIN=""
           if [ -f "bpftool" ]; then
             BPFTOOL_BIN="bpftool"
+            echo "✅ Found bpftool in current directory"
+          elif [ -f "../bpftool" ]; then
+            BPFTOOL_BIN="../bpftool"
+            echo "✅ Found bpftool in parent directory"
           elif [ -f "src/bpftool" ]; then
             BPFTOOL_BIN="src/bpftool"
-          elif [ -f "../src/bpftool" ]; then
-            BPFTOOL_BIN="../src/bpftool"
+            echo "✅ Found bpftool in src/bpftool"
           else
-            echo "Searching for bpftool binary..."
-            find . -name "bpftool" -type f 2>/dev/null | head -10
-            find .. -name "bpftool" -type f 2>/dev/null | head -10
-            echo "ERROR: bpftool binary not found after building from src/"
-            exit 1
+            # Do a more thorough search
+            echo "Doing thorough search for bpftool binary..."
+            ALL_BPFTOOLS=$(find . -name "bpftool" -type f 2>/dev/null)
+            if [ -n "$ALL_BPFTOOLS" ]; then
+              BPFTOOL_BIN=$(echo "$ALL_BPFTOOLS" | head -1)
+              echo "✅ Found bpftool at: $BPFTOOL_BIN"
+            else
+              echo "ERROR: bpftool binary not found after building from src/"
+              echo "Build directory contents:"
+              ls -la
+              echo "Parent directory contents:"
+              ls -la ..
+              exit 1
+            fi
           fi
           
           if [ -n "$BPFTOOL_BIN" ]; then
