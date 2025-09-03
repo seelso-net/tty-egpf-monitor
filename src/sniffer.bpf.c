@@ -563,26 +563,43 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     __s32 fd;
     const void __user *buf;
     size_t count;
+    
+    // Extract syscall arguments
     bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
     bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
     bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
+    
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-
+    
+    // Check if this fd is of interest
     struct fdkey k;
     k.tgid = tgid;
     k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
-
-    size_t cap = count > MAX_DATA ? MAX_DATA : count;
+    
+    // Create event
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) return 0;
-
+    
+    // Fill common fields
     fill_common(e, EV_WRITE);
-    e->dir = 1; e->ret = 0; e->cmd = 0;
+    e->dir = 1;  // app to device
+    e->ret = 0;  // will be filled on exit
+    e->cmd = 0;
     e->port_idx = *idxp;
-    e->data_len = cap; e->data_trunc = count > MAX_DATA ? (count - MAX_DATA) : 0;
-    if (cap && buf) bpf_probe_read_user(e->data, cap, buf);
+    
+    // Capture data (limit to MAX_DATA)
+    size_t cap = count > MAX_DATA ? MAX_DATA : count;
+    e->data_len = cap;
+    e->data_trunc = count > MAX_DATA ? (count - MAX_DATA) : 0;
+    
+    // Copy data from userspace buffer
+    if (cap && buf) {
+        bpf_probe_read_user(e->data, cap, buf);
+    }
+    
+    // Submit event
     bpf_ringbuf_submit(e, 0);
     return 0;
 }

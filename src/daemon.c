@@ -237,60 +237,66 @@ static bool is_important_ioctl(uint32_t cmd) {
 
 // Event attribute-based filtering: detect real TTY usage vs system scans
 static bool is_real_application(const struct event *e) {
-    // Use actual event attributes instead of timing patterns
+    // TEMPORARILY DISABLE ALL FILTERING FOR DEBUGGING
+    return true;
     
-    // 1. Return value filtering - failed system calls are often system noise
-    if (e->ret < 0) {
-        // Failed opens/closes are usually system probes
-        if (e->type == 1 || e->type == 2) { // OPEN/CLOSE
-            return false;
+    // Key insight: Any session with actual data transfer is legitimate
+    
+    // 1. Data events (READ/WRITE) are always legitimate if they succeed
+    if (e->type == 3 || e->type == 4) { // READ/WRITE
+        if (e->ret > 0) { // Successful data transfer
+            // Mark that this port has data activity for OPEN/CLOSE tracking
+            static bool has_data_activity[MAX_PORTS] = {false};
+            has_data_activity[e->port_idx] = true;
+            return true;
         }
-        // Failed reads/writes might be legitimate errors
     }
     
-    // 2. Event type specific filtering
-    switch (e->type) {
-        case 1: // OPEN
-            // Track successful opens for this port
-            static uint32_t open_fd_count[MAX_PORTS] = {0};
-            if (e->ret >= 0) { // Successful open
-                open_fd_count[e->port_idx]++;
-            }
-            break;
-            
-        case 2: // CLOSE
-            // Track successful closes
-            static uint32_t close_fd_count[MAX_PORTS] = {0};
-            if (e->ret >= 0) { // Successful close
-                close_fd_count[e->port_idx]++;
-            }
-            
-            // If we have more closes than opens, something's wrong
-            if (close_fd_count[e->port_idx] > open_fd_count[e->port_idx]) {
-                return false;
-            }
-            break;
-            
-        case 3: // READ
-        case 4: // WRITE
-            // Data events are always meaningful if they succeed
-            if (e->ret > 0) { // Successful read/write with data
-                return true;
-            }
-            break;
-            
-        case 5: // IOCTL
-            // Only log important IOCTLs that succeed
-            if (e->ret >= 0 && is_important_ioctl(e->cmd)) {
-                return true;
-            }
-            return false;
+    // 2. IOCTL events - only log important ones that succeed
+    if (e->type == 5) { // IOCTL
+        if (e->ret >= 0 && is_important_ioctl(e->cmd)) {
+            return true;
+        }
+        return false;
     }
     
-    // 3. Process name patterns - simple heuristic for obvious system processes
+    // 3. For OPEN/CLOSE events, use simple heuristics
+    if (e->type == 1 || e->type == 2) { // OPEN/CLOSE
+        
+        // Track file descriptor lifecycle per port
+        static struct {
+            uint32_t open_count;
+            uint32_t close_count;
+            bool has_data_activity;
+        } fd_tracker[MAX_PORTS] = {0};
+        
+        struct {
+            uint32_t open_count;
+            uint32_t close_count;
+            bool has_data_activity;
+        } *tracker = &fd_tracker[e->port_idx];
+        
+        if (e->type == 1) { // OPEN
+            tracker->open_count++;
+            tracker->has_data_activity = false; // Reset for new session
+        } else if (e->type == 2) { // CLOSE
+            tracker->close_count++;
+            
+            // Check if this session had data activity
+            static bool has_data_activity[MAX_PORTS] = {false};
+            bool session_has_data = has_data_activity[e->port_idx];
+            
+            // Only log CLOSE if we had data activity or it's a valid sequence
+            if (!session_has_data && tracker->close_count > tracker->open_count) {
+                return false; // Invalid sequence without data
+            }
+        }
+    }
+    
+    // 4. Process name filtering - skip obvious system processes
     const char *comm = e->comm;
     
-    // Skip obvious system daemons that end with 'd'
+    // Skip system daemons ending with 'd'
     if (strlen(comm) > 1 && comm[strlen(comm)-1] == 'd') {
         return false;
     }
@@ -300,7 +306,7 @@ static bool is_real_application(const struct event *e) {
         return false;
     }
     
-    // 4. Default: treat as real application if it passes attribute checks
+    // 5. Default: allow if it passes basic checks
     return true;
 }
 
@@ -1507,25 +1513,25 @@ int main(int argc, char **argv)
     }
     
     if (g_skel->links.tp_enter_openat_tp) {
-        // tp_enter_openat_tp program attached to tracepoint
+        fprintf(stderr, "tp_enter_openat_tp program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_enter_openat_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_openat2_tp) {
-        // tp_enter_openat2_tp program attached to tracepoint
+        fprintf(stderr, "tp_enter_openat2_tp program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_enter_openat2_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_openat_tp) {
-        // tp_exit_openat_tp program attached to tracepoint
+        fprintf(stderr, "tp_exit_openat_tp program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_exit_openat_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_openat2_tp) {
-        // tp_exit_openat2_tp program attached to tracepoint
+        fprintf(stderr, "tp_exit_openat2_tp program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_exit_openat2_tp program NOT attached to tracepoint\n");
     }
