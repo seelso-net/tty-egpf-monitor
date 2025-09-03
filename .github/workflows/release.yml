@@ -488,7 +488,7 @@ jobs:
         
         # Install additional dependencies needed for bpftool build
         echo "Installing additional build dependencies..."
-        apt-get install -y llvm-dev llvm-strip
+        apt-get install -y llvm-dev llvm
         
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
