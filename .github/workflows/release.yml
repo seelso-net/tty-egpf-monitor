@@ -485,6 +485,11 @@ jobs:
         
         # If all else fails, build from source (this ensures we have the latest features)
         echo "Building bpftool from source to ensure gen skeleton functionality..."
+        
+        # Install additional dependencies needed for bpftool build
+        echo "Installing additional build dependencies..."
+        apt-get install -y llvm-dev llvm-strip
+        
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
         cd /tmp/bpftool-src
@@ -493,7 +498,28 @@ jobs:
         echo "Looking for Makefile..."
         find . -name "Makefile" -o -name "makefile" -o -name "*.mk" | head -10
         echo "Checking if we need to bootstrap..."
-        if [ -f "Makefile" ]; then
+        
+        # Try building with minimal features to avoid llvm-strip dependency
+        if [ -f "src/Makefile" ]; then
+          echo "Makefile found in src/, building from src directory with minimal features..."
+          cd src
+          # Disable features that require llvm-strip
+          make -j$(nproc) V=1 FEATURES_DUMP=1 2>&1 | head -20 || true
+          echo "Trying build with disabled features..."
+          make -j$(nproc) V=1 DISABLE_LLVM=1 2>&1 | head -20 || true
+          echo "Trying simple build..."
+          make -j$(nproc) 2>&1 | head -20 || true
+          
+          if [ -f "bpftool" ]; then
+            echo "✅ bpftool built successfully!"
+            install -m 0755 bpftool /usr/local/bin/bpftool
+          else
+            echo "ERROR: bpftool binary not found after building from src/"
+            find . -name "bpftool" -type f
+            exit 1
+          fi
+          cd ..
+        elif [ -f "Makefile" ]; then
           echo "Makefile found in root, building..."
           make -j$(nproc)
           if [ -f "src/bpftool" ]; then
@@ -505,18 +531,6 @@ jobs:
             find . -name "bpftool" -type f
             exit 1
           fi
-        elif [ -f "src/Makefile" ]; then
-          echo "Makefile found in src/, building from src directory..."
-          cd src
-          make -j$(nproc)
-          if [ -f "bpftool" ]; then
-            install -m 0755 bpftool /usr/local/bin/bpftool
-          else
-            echo "ERROR: bpftool binary not found after building from src/"
-            find . -name "bpftool" -type f
-            exit 1
-          fi
-          cd ..
         elif [ -f "bootstrap.sh" ]; then
           echo "Bootstrap script found, running..."
           chmod +x bootstrap.sh
