@@ -446,55 +446,75 @@ jobs:
       run: |
         set -e
         echo "Checking for bpftool..."
-        if command -v bpftool >/dev/null 2>&1; then
-          echo "bpftool already available: $(bpftool version)"
-          exit 0
-        fi
-
-        echo "bpftool not found, installing..."
         
         # First, try to find any existing bpftool in linux-tools directories
         BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
         if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
           echo "Found existing bpftool in $BPFDIR"
           ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
-          bpftool version
-          exit 0
+          echo "bpftool version: $(bpftool version)"
+          # Test if gen skeleton works
+          echo "Testing gen skeleton functionality..."
+          if bpftool gen skeleton --help >/dev/null 2>&1; then
+            echo "✅ bpftool gen skeleton works correctly"
+            exit 0
+          else
+            echo "⚠️  bpftool found but gen skeleton not working, will build from source"
+          fi
         fi
         
-        # Try to install any available linux-tools packages
-        echo "Trying to install available linux-tools packages..."
+        # Try to install linux-tools-generic-hwe-22.04 specifically
+        echo "Installing linux-tools-generic-hwe-22.04 for bpftool..."
         apt-get update >/dev/null 2>&1
-        
-        # Find available linux-tools packages and install them
-        AVAILABLE_TOOLS=$(apt-cache search "^linux-tools-[0-9]" | grep -o "linux-tools-[0-9][^ ]*" | head -5)
-        for pkg in $AVAILABLE_TOOLS; do
-          echo "Trying to install $pkg..."
-          if apt-get install -y "$pkg" >/dev/null 2>&1; then
-            echo "Successfully installed $pkg"
-            # Check if it provided bpftool
-            BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
-            if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
-              ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
-              bpftool version
+        if apt-get install -y linux-tools-generic-hwe-22.04 >/dev/null 2>&1; then
+          echo "Successfully installed linux-tools-generic-hwe-22.04"
+          # Check if it provided bpftool
+          BPFDIR=$(ls -d /usr/lib/linux-tools-* 2>/dev/null | head -n1 || true)
+          if [ -n "$BPFDIR" ] && [ -x "$BPFDIR/bpftool" ]; then
+            ln -sf "$BPFDIR/bpftool" /usr/local/bin/bpftool
+            echo "bpftool version: $(bpftool version)"
+            # Test if gen skeleton works
+            if bpftool gen skeleton --help >/dev/null 2>&1; then
+              echo "✅ bpftool gen skeleton works correctly"
               exit 0
+            else
+              echo "⚠️  HWE bpftool gen skeleton not working, will build from source"
             fi
           fi
-        done
+        fi
         
-        # If all else fails, build from source
-        echo "No distro bpftool found, building from source..."
+        # If all else fails, build from source (this ensures we have the latest features)
+        echo "Building bpftool from source to ensure gen skeleton functionality..."
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
-        make -C /tmp/bpftool-src -j$(nproc)
-        install -m 0755 /tmp/bpftool-src/src/bpftool /usr/local/bin/bpftool
+        cd /tmp/bpftool-src
+        make -j$(nproc)
+        install -m 0755 src/bpftool /usr/local/bin/bpftool
+        cd -
         rm -rf /tmp/bpftool-src
         
         echo "Verifying bpftool installation..."
         bpftool version
+        echo "Testing gen skeleton functionality..."
+        if bpftool gen skeleton --help >/dev/null 2>&1; then
+          echo "✅ bpftool gen skeleton works correctly"
+        else
+          echo "❌ ERROR: bpftool gen skeleton still not working after building from source"
+          exit 1
+        fi
 
     - name: Build application
       run: |
+        echo "=== Debug: Checking kernel headers and bpftool ==="
+        echo "Current bpftool: $(which bpftool)"
+        echo "bpftool version: $(bpftool version)"
+        echo "Testing gen skeleton:"
+        bpftool gen skeleton --help | head -5
+        echo "Available kernel headers:"
+        ls -la /usr/src/ | grep linux-headers || echo "No linux-headers found"
+        echo "HWE kernel headers:"
+        ls -la /usr/src/ | grep hwe || echo "No HWE headers found"
+        echo "=== Starting build ==="
         make clean
         make
 
