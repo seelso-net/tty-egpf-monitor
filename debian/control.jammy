@@ -2,7 +2,7 @@ Source: tty-egpf-monitor
 Section: utils
 Priority: optional
 Maintainer: Adrian <adrian@example.com>
-Build-Depends: debhelper (>= 13), clang, make, libelf-dev, zlib1g-dev, pkg-config, build-essential, linux-headers-generic, libbpf-dev, bpftool | linux-tools-common, libsystemd-dev
+Build-Depends: debhelper (>= 13), clang, make, libelf-dev, zlib1g-dev, pkg-config, build-essential, linux-headers-generic-hwe-22.04, libbpf-dev, bpftool | linux-tools-common, libsystemd-dev
 
 Package: tty-egpf-monitord
 Architecture: any
