@@ -506,25 +506,25 @@ jobs:
           
           # Try to build with explicit target to ensure binary is created
           echo "Building bpftool binary with explicit target..."
-          make -j$(nproc) bpftool 2>&1 | head -50 || true
+          make -j$(nproc) bpftool
           
           # If that didn't work, try with disabled features
           if [ ! -f "bpftool" ]; then
             echo "Trying build with disabled features..."
-            make -j$(nproc) V=1 DISABLE_LLVM=1 bpftool 2>&1 | head -50 || true
+            make -j$(nproc) V=1 DISABLE_LLVM=1 bpftool
           fi
           
           # If still no binary, try with minimal features
           if [ ! -f "bpftool" ]; then
             echo "Trying minimal build..."
-            make -j$(nproc) V=1 FEATURES_DUMP=1 bpftool 2>&1 | head -50 || true
+            make -j$(nproc) V=1 FEATURES_DUMP=1 bpftool
           fi
           
           # If still no binary, try clean build
           if [ ! -f "bpftool" ]; then
             echo "Trying clean build..."
             make clean
-            make -j$(nproc) bpftool 2>&1 | head -50 || true
+            make -j$(nproc) bpftool
           fi
           
           # Look for the binary in multiple possible locations with better search
