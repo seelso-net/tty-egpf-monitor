@@ -125,6 +125,9 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(valu
 /* Carry matched target index from openat enter to exit (per-tgid) */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u32); __uint(max_entries, 32768); } pending_open_idx SEC(".maps");
 
+/* Track whether we've emitted OPEN event for a (tgid,fd) */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_open_emitted SEC(".maps");
+
 /* Debug counters for open mapping */
 struct dbg_open_vals {
     __u64 enter_seen_raw;
@@ -319,25 +322,16 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
             __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
             if (dv2) dv2->exit_seen_raw += 1;
 
-            /* First, if path match was recorded, use it */
+            /* If path match was recorded, only map fd; do NOT emit OPEN here */
             __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
             if (idxp) {
                 __u32 midx = *idxp;
                 struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1;
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-                struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-                if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
-                bpf_printk("open-exit raw(path): tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
                 if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
-                return 0;
             }
-
-            /* Fallback: match by device major:minor - simplified */
-            __s32 matched_idx = -1;
-            /* For now, just use the path-based matching that was working */
-            /* The real issue is why tracepoint programs aren't attaching */
         }
         return 0;
     }
@@ -458,50 +452,17 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 {
     __s64 ret = 0; 
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
-    
-    // CRITICAL: Never generate events for failed opens
     if (ret < 0) {
-        // Clean up any pending state for failed opens
-        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-        bpf_map_delete_elem(&pending_open_idx, &tgid);
+        __u32 tgid_fail = bpf_get_current_pid_tgid() >> 32;
+        bpf_map_delete_elem(&pending_open_idx, &tgid_fail);
         return 0;
     }
-    
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
-    if (!idxp) {
-        return 0;
-    }
-    
-    struct fdkey k; 
-    k.tgid = tgid; 
-    k.fd = (__s32)ret; 
-    __u8 one = 1; 
-    __u32 midx = *idxp;
-    
+    if (!idxp) return 0;
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    
-    // Only generate OPEN event for successful opens
-    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-    if (e) { 
-        fill_common(e, EV_OPEN); 
-        e->cmd=0; 
-        e->ret=ret; 
-        e->dir=0; 
-        e->port_idx=midx; 
-        e->data_len=0; 
-        e->data_trunc=0; 
-        bpf_ringbuf_submit(e, 0); 
-    }
-    
-    bpf_printk("open-exit tp: tgid=%u fd=%d idx=%u ret=%lld\n", tgid, (__s32)ret, midx, ret);
-    __u32 dkey = 0; 
-    struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
-    if (dv) { 
-        dv->exit_mapped += 1; 
-        dv->last_fd = (__s32)ret; 
-    }
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
@@ -511,43 +472,17 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
 {
     __s64 ret = 0; 
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
-    
-    // CRITICAL: Never generate events for failed opens
     if (ret < 0) {
-        // Clean up any pending state for failed opens
-        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-        bpf_map_delete_elem(&pending_open_idx, &tgid);
+        __u32 tgid_fail = bpf_get_current_pid_tgid() >> 32;
+        bpf_map_delete_elem(&pending_open_idx, &tgid_fail);
         return 0;
     }
-    
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
-    if (!idxp) {
-        return 0;
-    }
-    
-    struct fdkey k; 
-    k.tgid = tgid; 
-    k.fd = (__s32)ret; 
-    __u8 one = 1; 
-    __u32 midx = *idxp;
-    
+    if (!idxp) return 0;
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    
-    // Only generate OPEN event for successful opens
-    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-    if (e) { 
-        fill_common(e, EV_OPEN); 
-        e->cmd=0; 
-        e->ret=ret; 
-        e->dir=0; 
-        e->port_idx=midx; 
-        e->data_len=0; 
-        e->data_trunc=0; 
-        bpf_ringbuf_submit(e, 0); 
-    }
-    
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
@@ -597,11 +532,9 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
 
     if (ret == 0) {
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
-        bpf_map_delete_elem(&rd_ctx, &k);      /* drop any pending read ctx */
-        bpf_map_delete_elem(&fd_interest, &k); /* unmark fd */
-        if (idxp) bpf_map_delete_elem(&fd_portidx, &k);
-
-        if (idxp) {
+        /* only emit CLOSE if we emitted OPEN */
+        __u8 *emitted = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (emitted && idxp) {
             struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
             if (e) {
                 fill_common(e, EV_CLOSE);
@@ -610,6 +543,11 @@ int tp_exit_close(struct trace_event_raw_sys_exit *ctx)
                 bpf_ringbuf_submit(e, 0);
             }
         }
+        /* cleanup state */
+        bpf_map_delete_elem(&fd_open_emitted, &k);
+        bpf_map_delete_elem(&rd_ctx, &k);
+        bpf_map_delete_elem(&fd_interest, &k);
+        if (idxp) bpf_map_delete_elem(&fd_portidx, &k);
     }
     return 0;
 }
@@ -636,16 +574,18 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
-    // Create event
+    /* Emit OPEN once on first usage */
+    __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
+    if (!em) {
+        __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
+        struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+        if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=0; o->dir=0; o->port_idx=*idxp; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
+    }
+
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) return 0;
-
-    // Fill common fields
     fill_common(e, EV_WRITE);
-    e->dir = 1;  // app to device
-    e->ret = 0;  // will be filled on exit
-    e->cmd = 0;
-    e->port_idx = *idxp;
+    e->dir = 1; e->ret = 0; e->cmd = 0; e->port_idx = *idxp;
     
     // Capture data (limit to MAX_DATA)
     size_t cap = count > MAX_DATA ? MAX_DATA : count;
@@ -716,6 +656,14 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
     if (ret <= 0) {
         bpf_map_delete_elem(&rd_ctx, &tgid);
         return 0;
+    }
+
+    /* Emit OPEN once on first usage */
+    __u8 *em2 = bpf_map_lookup_elem(&fd_open_emitted, &k);
+    if (!em2) {
+        __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
+        struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
+        if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=0; o2->dir=0; o2->port_idx=*idxp; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
     }
 
     size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
