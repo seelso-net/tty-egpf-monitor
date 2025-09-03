@@ -122,7 +122,7 @@ static void handle_port_state_transition(uint32_t port_idx, int event_type, uint
 
 // Smart event filtering - ignore system noise
 static bool should_ignore_event(const struct event *e);
-static bool is_real_application(const char *comm);
+static bool is_real_application(const struct event *e);
 
 static void write_info_line(uint32_t idx)
 {
@@ -235,66 +235,72 @@ static bool is_important_ioctl(uint32_t cmd) {
     }
 }
 
-// Smart event filtering - ignore system noise and only process real applications
-static bool is_real_application(const char *comm) {
-    // Whitelist of real applications we actually care about
-    static const char *real_applications[] = {
-        "picocom", "minicom", "screen", "tmux", "python", "python3", "node", "nodejs",
-        "java", "gcc", "clang", "make", "cmake", "git", "vim", "nano", "emacs",
-        "firefox", "chrome", "chromium", "thunderbird", "libreoffice", "gimp",
-        "ffmpeg", "vlc", "mplayer", "curl", "wget", "ssh", "scp", "rsync",
-        "mysql", "postgres", "redis", "nginx", "apache2", "httpd",
-        "custom_app", "my_script", "user_program", "arduino", "platformio",
-        NULL
-    };
+// Event attribute-based filtering: detect real TTY usage vs system scans
+static bool is_real_application(const struct event *e) {
+    // Use actual event attributes instead of timing patterns
     
-    // Check if this is a known real application
-    for (int i = 0; real_applications[i] != NULL; i++) {
-        if (strcmp(comm, real_applications[i]) == 0) {
-            return true;  // This is a real application we care about
+    // 1. Return value filtering - failed system calls are often system noise
+    if (e->ret < 0) {
+        // Failed opens/closes are usually system probes
+        if (e->type == 1 || e->type == 2) { // OPEN/CLOSE
+            return false;
         }
+        // Failed reads/writes might be legitimate errors
     }
     
-    // Blacklist of system processes that should always be ignored
-    static const char *system_processes[] = {
-        "systemd", "udevd", "dbus-daemon", "NetworkManager", "rsyslogd",
-        "cron", "sshd", "polkitd", "avahi-daemon", "systemd-logind",
-        "systemd-resolved", "systemd-udevd", "systemd-networkd", "systemd-timesyncd",
-        "runc", "containerd", "docker", "kubelet", "kube-proxy",
-        "stty", "cat", "echo", "dd", "tee", "socat", "nc", "netcat",
-        "lsof", "ps", "top", "htop", "iotop", "strace", "ltrace",
-        "gdb", "valgrind", "perf", "bpftool", "tty-egpf-monitor",
-        NULL
-    };
-    
-    // Check if this is a system process
-    for (int i = 0; system_processes[i] != NULL; i++) {
-        if (strcmp(comm, system_processes[i]) == 0) {
-            return false;  // This is a system process, ignore it
-        }
-    }
-    
-    // For unknown processes, use heuristics:
-    // - Too short names are probably not real apps
-    if (strlen(comm) < 2) return false;
-    
-    // - Names with numbers only are probably not real apps
-    bool all_digits = true;
-    for (size_t i = 0; i < strlen(comm); i++) {
-        if (!isdigit(comm[i])) {
-            all_digits = false;
+    // 2. Event type specific filtering
+    switch (e->type) {
+        case 1: // OPEN
+            // Track successful opens for this port
+            static uint32_t open_fd_count[MAX_PORTS] = {0};
+            if (e->ret >= 0) { // Successful open
+                open_fd_count[e->port_idx]++;
+            }
             break;
-        }
+            
+        case 2: // CLOSE
+            // Track successful closes
+            static uint32_t close_fd_count[MAX_PORTS] = {0};
+            if (e->ret >= 0) { // Successful close
+                close_fd_count[e->port_idx]++;
+            }
+            
+            // If we have more closes than opens, something's wrong
+            if (close_fd_count[e->port_idx] > open_fd_count[e->port_idx]) {
+                return false;
+            }
+            break;
+            
+        case 3: // READ
+        case 4: // WRITE
+            // Data events are always meaningful if they succeed
+            if (e->ret > 0) { // Successful read/write with data
+                return true;
+            }
+            break;
+            
+        case 5: // IOCTL
+            // Only log important IOCTLs that succeed
+            if (e->ret >= 0 && is_important_ioctl(e->cmd)) {
+                return true;
+            }
+            return false;
     }
-    if (all_digits) return false;
     
-    // - Names with special characters are probably not real apps
-    if (strchr(comm, '[') || strchr(comm, ']') || strchr(comm, ':') || strchr(comm, '(')) {
+    // 3. Process name patterns - simple heuristic for obvious system processes
+    const char *comm = e->comm;
+    
+    // Skip obvious system daemons that end with 'd'
+    if (strlen(comm) > 1 && comm[strlen(comm)-1] == 'd') {
         return false;
     }
     
-    // Default to treating unknown processes as real applications
-    // (they might be user scripts or custom programs)
+    // Skip processes with brackets (like runc:[2:INIT])
+    if (strchr(comm, '[') || strchr(comm, ']')) {
+        return false;
+    }
+    
+    // 4. Default: treat as real application if it passes attribute checks
     return true;
 }
 
@@ -307,7 +313,7 @@ static bool should_ignore_event(const struct event *e) {
     
     if (e->type == 1 || e->type == 2) {  // OPEN or CLOSE events
         // Only process OPEN/CLOSE for real applications (not system tools)
-        return !is_real_application(e->comm);
+        return !is_real_application(e);
     }
     
     if (e->type == 3 || e->type == 4) {  // READ or WRITE events
@@ -322,7 +328,7 @@ static bool should_ignore_event(const struct event *e) {
         // IOCTL events are mostly system noise - only log for real applications
         // and only when they're actually using the port
         if (e->port_idx < MAX_PORTS) {
-            return !is_real_application(e->comm) || port_states[e->port_idx] == ST_ACTIVE;
+            return !is_real_application(e) || port_states[e->port_idx] == ST_ACTIVE;
         }
         return true;  // Ignore if port_idx is invalid
     }
@@ -486,7 +492,17 @@ static void handle_port_state_transition(uint32_t port_idx, int event_type, uint
     if (tgid == self_tgid) return;
     
     // Double-check that this is a real application (defensive programming)
-    if (!is_real_application(comm)) return;
+    // Create a minimal event struct for checking
+    struct event check_event = {0};
+    check_event.pid = 0;
+    check_event.tgid = tgid;
+    strncpy(check_event.comm, comm, sizeof(check_event.comm) - 1);
+    check_event.comm[sizeof(check_event.comm) - 1] = '\0';
+    check_event.type = event_type;
+    check_event.port_idx = port_idx;
+    check_event.ret = 0; // Assume success for state transitions
+    
+    if (!is_real_application(&check_event)) return;
     
     if (event_type == 1) { // OPEN
         // Only switch to passive if we're currently in active mode
