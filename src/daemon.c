@@ -110,6 +110,19 @@ static struct last_event last_events[MAX_PORTS] = {0};
 static int port_baudrates[MAX_PORTS]; // Baudrate for each port
 static uint32_t self_tgid = 0; // Our own process ID to ignore our own opens/closes
 
+// Track port state for mode switching (independent of logging decisions)
+static struct {
+    uint32_t active_fds;  // Number of currently open FDs per port
+    bool has_real_usage;   // Whether any FD was used for real operations
+} port_state[MAX_PORTS] = {0};
+
+// Mark that a file descriptor was used for real operations
+static void mark_fd_real_usage(uint32_t port_idx) {
+    if (port_idx < MAX_PORTS) {
+        port_state[port_idx].has_real_usage = true;
+    }
+}
+
 // Forward declarations
 static void save_config(void);
 static void load_config(void);
@@ -237,17 +250,12 @@ static bool is_important_ioctl(uint32_t cmd) {
 
 // Event attribute-based filtering: detect real TTY usage vs system scans
 static bool is_real_application(const struct event *e) {
-    // TEMPORARILY DISABLE ALL FILTERING FOR DEBUGGING
-    return true;
-    
-    // Key insight: Any session with actual data transfer is legitimate
+    // Key insight: Real applications actually USE the file descriptor, not just open/close it
     
     // 1. Data events (READ/WRITE) are always legitimate if they succeed
     if (e->type == 3 || e->type == 4) { // READ/WRITE
         if (e->ret > 0) { // Successful data transfer
-            // Mark that this port has data activity for OPEN/CLOSE tracking
-            static bool has_data_activity[MAX_PORTS] = {false};
-            has_data_activity[e->port_idx] = true;
+            mark_fd_real_usage(e->port_idx); // Mark that FD was used for real operations
             return true;
         }
     }
@@ -255,58 +263,34 @@ static bool is_real_application(const struct event *e) {
     // 2. IOCTL events - only log important ones that succeed
     if (e->type == 5) { // IOCTL
         if (e->ret >= 0 && is_important_ioctl(e->cmd)) {
+            mark_fd_real_usage(e->port_idx); // Mark that FD was used for real operations
             return true;
         }
         return false;
     }
     
-    // 3. For OPEN/CLOSE events, use simple heuristics
+    // 3. For OPEN/CLOSE events, update port state and decide logging
     if (e->type == 1 || e->type == 2) { // OPEN/CLOSE
         
-        // Track file descriptor lifecycle per port
-        static struct {
-            uint32_t open_count;
-            uint32_t close_count;
-            bool has_data_activity;
-        } fd_tracker[MAX_PORTS] = {0};
-        
-        struct {
-            uint32_t open_count;
-            uint32_t close_count;
-            bool has_data_activity;
-        } *tracker = &fd_tracker[e->port_idx];
-        
         if (e->type == 1) { // OPEN
-            tracker->open_count++;
-            tracker->has_data_activity = false; // Reset for new session
+            port_state[e->port_idx].active_fds++;
+            // Always log OPEN events for mode switching logic
+            return true;
         } else if (e->type == 2) { // CLOSE
-            tracker->close_count++;
-            
-            // Check if this session had data activity
-            static bool has_data_activity[MAX_PORTS] = {false};
-            bool session_has_data = has_data_activity[e->port_idx];
-            
-            // Only log CLOSE if we had data activity or it's a valid sequence
-            if (!session_has_data && tracker->close_count > tracker->open_count) {
-                return false; // Invalid sequence without data
+            if (port_state[e->port_idx].active_fds > 0) {
+                port_state[e->port_idx].active_fds--;
             }
+            
+            // Only log CLOSE if we had real usage (for cleaner logs)
+            if (port_state[e->port_idx].has_real_usage) {
+                port_state[e->port_idx].has_real_usage = false; // Reset for next session
+                return true; // Had real usage, log the CLOSE
+            }
+            return false; // No real usage = fake open/close, don't log
         }
     }
     
-    // 4. Process name filtering - skip obvious system processes
-    const char *comm = e->comm;
-    
-    // Skip system daemons ending with 'd'
-    if (strlen(comm) > 1 && comm[strlen(comm)-1] == 'd') {
-        return false;
-    }
-    
-    // Skip processes with brackets (like runc:[2:INIT])
-    if (strchr(comm, '[') || strchr(comm, ']')) {
-        return false;
-    }
-    
-    // 5. Default: allow if it passes basic checks
+    // 4. Default: allow if it passes checks
     return true;
 }
 
@@ -497,19 +481,7 @@ static void handle_port_state_transition(uint32_t port_idx, int event_type, uint
     // Ignore our own opens/closes
     if (tgid == self_tgid) return;
     
-    // Double-check that this is a real application (defensive programming)
-    // Create a minimal event struct for checking
-    struct event check_event = {0};
-    check_event.pid = 0;
-    check_event.tgid = tgid;
-    strncpy(check_event.comm, comm, sizeof(check_event.comm) - 1);
-    check_event.comm[sizeof(check_event.comm) - 1] = '\0';
-    check_event.type = event_type;
-    check_event.port_idx = port_idx;
-    check_event.ret = 0; // Assume success for state transitions
-    
-    if (!is_real_application(&check_event)) return;
-    
+    // Mode switching is now based on actual port state, not filtering decisions
     if (event_type == 1) { // OPEN
         // Only switch to passive if we're currently in active mode
         if (port_states[port_idx] == ST_ACTIVE) {

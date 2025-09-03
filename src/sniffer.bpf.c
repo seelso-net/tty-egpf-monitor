@@ -185,7 +185,7 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         __u32 dkey = 0; struct dbg_open_vals *dv_enter = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv_enter) dv_enter->enter_seen_raw += 1;
         const char *filename = NULL;
-        bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
         __u32 k0 = 0;
         struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
         if (!sg)
@@ -263,13 +263,13 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
         bpf_probe_read_kernel(&buf, sizeof(buf), &ctx->args[1]);
         bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
-        __u32 k0 = 0;
+    __u32 k0 = 0;
         struct read_ctx *rc = bpf_map_lookup_elem(&scratch3, &k0);
         if (!rc) return 0;
         rc->fd = fd; rc->buf = buf; rc->count = count;
         bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
-        return 0;
-    }
+    return 0;
+}
 
     if (id == __NR_readv) {
         __s32 fd; const struct __iovec *iov; unsigned long vcnt;
@@ -282,7 +282,7 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct __iovec first = {};
         bpf_probe_read_user(&first, sizeof(first), iov);
         rc->fd = fd; rc->buf = first.iov_base; rc->count = first.iov_len;
-        __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
         bpf_map_update_elem(&rd_ctx, &tgid, rc, BPF_ANY);
         return 0;
     }
@@ -398,20 +398,20 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     if (glen <= 0)
         return 0;
 
-    __s32 matched_idx = -1;
+        __s32 matched_idx = -1;
 #pragma unroll
-    for (int i = 0; i < MAX_TARGETS; i++) {
-        struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-        if (!sw) break;
-        __u32 ki = i;
-        struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-        if (!tpv) continue;
-        bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+            for (int i = 0; i < MAX_TARGETS; i++) {
+                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+                if (!sw) break;
+                __u32 ki = i;
+                struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+                if (!tpv) continue;
+                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
         if (sw->path[0] == '\0') continue;
-        if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-    }
-    if (matched_idx >= 0) {
-        __u32 midx = (unsigned)matched_idx;
+                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            }
+        if (matched_idx >= 0) {
+            __u32 midx = (unsigned)matched_idx;
         bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
@@ -434,20 +434,20 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
     if (glen <= 0)
         return 0;
 
-    __s32 matched_idx = -1;
+        __s32 matched_idx = -1;
 #pragma unroll
-    for (int i = 0; i < MAX_TARGETS; i++) {
-        struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-        if (!sw) break;
-        __u32 ki = i;
-        struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-        if (!tpv) continue;
-        bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+        for (int i = 0; i < MAX_TARGETS; i++) {
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
+            __u32 ki = i;
+            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+            if (!tpv) continue;
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
         if (sw->path[0] == '\0') continue;
-        if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-    }
-    if (matched_idx >= 0) {
-        __u32 midx = (unsigned)matched_idx;
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+        }
+        if (matched_idx >= 0) {
+            __u32 midx = (unsigned)matched_idx;
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
     }
     return 0;
@@ -464,8 +464,8 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     if (!idxp)
         return 0;
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
     bpf_printk("open-exit tp: tgid=%u fd=%d idx=%u\n", tgid, (__s32)ret, midx);
@@ -488,7 +488,7 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (e) { fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0; bpf_ringbuf_submit(e, 0); }
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
@@ -570,18 +570,18 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&count, sizeof(count), &ctx->args[2]);
     
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    
+
     // Check if this fd is of interest
     struct fdkey k;
     k.tgid = tgid;
     k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
-    
+
     // Create event
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) return 0;
-    
+
     // Fill common fields
     fill_common(e, EV_WRITE);
     e->dir = 1;  // app to device
