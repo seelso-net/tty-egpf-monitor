@@ -98,6 +98,15 @@ static int port_states[MAX_PORTS] = {0}; // State for each port
 static int active_fds[MAX_PORTS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 static pthread_t active_reader_threads[MAX_PORTS];
 static int foreign_openers[MAX_PORTS] = {0}; // Count of foreign processes using each port
+
+// Duplicate event prevention
+struct last_event {
+    uint32_t tgid;
+    uint32_t type;
+    uint64_t ts;
+    char comm[16];
+};
+static struct last_event last_events[MAX_PORTS] = {0};
 static int port_baudrates[MAX_PORTS]; // Baudrate for each port
 static uint32_t self_tgid = 0; // Our own process ID to ignore our own opens/closes
 
@@ -151,8 +160,11 @@ static void log_simple_event(uint32_t port_idx, const char *event_type, const ch
     clock_gettime(CLOCK_REALTIME, &ts);
     
     if (g_log_mode == LOG_MODE_SIMPLE) {
-        fprintf(port_logs[port_idx], "[%s] %s: %s\n", 
-                ctime(&ts.tv_sec), event_type, details);
+        struct tm *tm_info = localtime(&ts.tv_sec);
+        char time_str[32];
+        strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+        fprintf(port_logs[port_idx], "[%s.%03ld] %s: %s\n", 
+                time_str, ts.tv_nsec / 1000000, event_type, details);
     }
     fflush(port_logs[port_idx]);
 }
@@ -163,7 +175,10 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
     clock_gettime(CLOCK_REALTIME, &ts);
     
     if (g_log_mode == LOG_MODE_SIMPLE) {
-        fprintf(port_logs[port_idx], "[%s] %s: ", ctime(&ts.tv_sec), direction);
+        struct tm *tm_info = localtime(&ts.tv_sec);
+        char time_str[32];
+        strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+        fprintf(port_logs[port_idx], "[%s.%03ld] %s: ", time_str, ts.tv_nsec / 1000000, direction);
         for (size_t i = 0; i < len && i < 32; i++) {  // Limit to 32 chars for readability
             if (data[i] >= 32 && data[i] <= 126) {
                 fprintf(port_logs[port_idx], "%c", data[i]);
@@ -175,6 +190,49 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
         fprintf(port_logs[port_idx], "\n");
     }
     fflush(port_logs[port_idx]);
+}
+
+// Check if this is a duplicate event (same process, same type, within short time)
+static bool is_duplicate_event(uint32_t port_idx, const struct event *e) {
+    if (port_idx >= MAX_PORTS) return false;
+    
+    struct last_event *last = &last_events[port_idx];
+    uint64_t time_diff = e->ts - last->ts;
+    
+    // Consider it duplicate if same process, same type, within 100ms
+    if (last->tgid == e->tgid && last->type == e->type && 
+        strcmp(last->comm, e->comm) == 0 && time_diff < 100000000) { // 100ms in nanoseconds
+        return true;
+    }
+    
+    // Update last event
+    last->tgid = e->tgid;
+    last->type = e->type;
+    last->ts = e->ts;
+    strncpy(last->comm, e->comm, sizeof(last->comm) - 1);
+    last->comm[sizeof(last->comm) - 1] = '\0';
+    
+    return false;
+}
+
+// Check if IOCTL command is important enough to log
+static bool is_important_ioctl(uint32_t cmd) {
+    // Only log IOCTLs that are meaningful for TTY operations
+    // Common TTY IOCTLs: TCGETS, TCSETS, TCSETSW, TCSETSF, TCFLSH, TIOCMGET, TIOCMSET
+    switch (cmd) {
+        case 0x5401:  // TCGETS
+        case 0x5402:  // TCSETS  
+        case 0x5403:  // TCSETSW
+        case 0x5404:  // TCSETSF
+        case 0x540B:  // TCFLSH
+        case 0x5415:  // TIOCMGET
+        case 0x5416:  // TIOCMSET
+        case 0x5417:  // TIOCMBIC
+        case 0x5418:  // TIOCMBIS
+            return true;
+        default:
+            return false;
+    }
 }
 
 // Smart event filtering - ignore system noise and only process real applications
@@ -431,7 +489,8 @@ static void handle_port_state_transition(uint32_t port_idx, int event_type, uint
     if (!is_real_application(comm)) return;
     
     if (event_type == 1) { // OPEN
-        if (foreign_openers[port_idx] == 0 && port_states[port_idx] == ST_ACTIVE) {
+        // Only switch to passive if we're currently in active mode
+        if (port_states[port_idx] == ST_ACTIVE) {
             enter_passive_mode(port_idx);
         }
         foreign_openers[port_idx]++;
@@ -439,6 +498,7 @@ static void handle_port_state_transition(uint32_t port_idx, int event_type, uint
         if (foreign_openers[port_idx] > 0) {
             foreign_openers[port_idx]--;
         }
+        // Only switch back to active if no more foreign processes and we're in passive mode
         if (foreign_openers[port_idx] == 0 && port_states[port_idx] == ST_PASSIVE && !stop_flag) {
             enter_active_mode(port_idx);
         }
@@ -592,28 +652,43 @@ static void log_event_json(const struct event *e)
         const char *etype = e->type==1?"OPEN":e->type==2?"CLOSE":e->type==3?"READ":e->type==4?"WRITE":"IOCTL";
         
         if (e->type == 1) { // OPEN
-            fprintf(f, "[%s] %s: %s opened port (baud: %d)\n", 
-                    ctime(&ts.tv_sec), etype, e->comm, port_baudrates[idx]);
+            struct tm *tm_info = localtime(&ts.tv_sec);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            fprintf(f, "[%s.%03ld] %s: %s opened port (baud: %d)\n", 
+                    time_str, ts.tv_nsec / 1000000, etype, e->comm, port_baudrates[idx]);
         } else if (e->type == 2) { // CLOSE
-            fprintf(f, "[%s] %s: %s closed port\n", 
-                    ctime(&ts.tv_sec), etype, e->comm);
+            struct tm *tm_info = localtime(&ts.tv_sec);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            fprintf(f, "[%s.%03ld] %s: %s closed port\n", 
+                    time_str, ts.tv_nsec / 1000000, etype, e->comm);
         } else if (e->type == 3 || e->type == 4) { // READ/WRITE
             const char *dir = e->type==4?"APP->DEV":"DEV->APP";
-            fprintf(f, "[%s] %s: %s %s ", ctime(&ts.tv_sec), etype, e->comm, dir);
+            struct tm *tm_info = localtime(&ts.tv_sec);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            fprintf(f, "[%s.%03ld] %s: %s %s ", time_str, ts.tv_nsec / 1000000, etype, e->comm, dir);
             
             // Show data in readable format
             for (unsigned i = 0; i < e->data_len && i < 32; i++) {
                 if (e->data[i] >= 32 && e->data[i] <= 126) {
                     fprintf(f, "%c", e->data[i]);
                 } else {
-                    fprintf(f, "\\x%02x", e->data[i]);
+                    fprintf(f, "\\x%02x", (unsigned char)e->data[i]);
                 }
             }
             if (e->data_len > 32) fprintf(f, "...");
             fprintf(f, "\n");
         } else if (e->type == 5) { // IOCTL
-            fprintf(f, "[%s] %s: %s ioctl cmd=0x%x\n", 
-                    ctime(&ts.tv_sec), etype, e->comm, e->cmd);
+            // Only log important IOCTLs to reduce spam
+            if (is_important_ioctl(e->cmd)) {
+                struct tm *tm_info = localtime(&ts.tv_sec);
+                char time_str[32];
+                strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+                fprintf(f, "[%s.%03ld] %s: %s ioctl cmd=0x%x\n", 
+                        time_str, ts.tv_nsec / 1000000, etype, e->comm, e->cmd);
+            }
         }
     } else {
         // Advanced, machine-readable format (original JSON)
@@ -659,6 +734,12 @@ static int handle_event(void *ctx, void *data, size_t len)
     if (should_ignore_event(e)) {
         pthread_mutex_unlock(&ports_mu);
         return 0;  // Skip this event entirely
+    }
+    
+    // Check for duplicate events to reduce spam
+    if (is_duplicate_event(e->port_idx, e)) {
+        pthread_mutex_unlock(&ports_mu);
+        return 0;  // Skip duplicate events
     }
     
     // Log only meaningful events
