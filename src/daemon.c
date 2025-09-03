@@ -109,7 +109,11 @@ static void set_termios(int fd, int speed, int databits, char parity, int stopbi
 static void *active_reader(void *arg);
 static void enter_active_mode(uint32_t port_idx);
 static void enter_passive_mode(uint32_t port_idx);
-static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid);
+static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid, const char *comm);
+
+// Smart event filtering - ignore system noise
+static bool should_ignore_event(const struct event *e);
+static bool is_real_application(const char *comm);
 
 static void write_info_line(uint32_t idx)
 {
@@ -171,6 +175,101 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
         fprintf(port_logs[port_idx], "\n");
     }
     fflush(port_logs[port_idx]);
+}
+
+// Smart event filtering - ignore system noise and only process real applications
+static bool is_real_application(const char *comm) {
+    // Whitelist of real applications we actually care about
+    static const char *real_applications[] = {
+        "picocom", "minicom", "screen", "tmux", "python", "python3", "node", "nodejs",
+        "java", "gcc", "clang", "make", "cmake", "git", "vim", "nano", "emacs",
+        "firefox", "chrome", "chromium", "thunderbird", "libreoffice", "gimp",
+        "ffmpeg", "vlc", "mplayer", "curl", "wget", "ssh", "scp", "rsync",
+        "mysql", "postgres", "redis", "nginx", "apache2", "httpd",
+        "custom_app", "my_script", "user_program", "arduino", "platformio",
+        NULL
+    };
+    
+    // Check if this is a known real application
+    for (int i = 0; real_applications[i] != NULL; i++) {
+        if (strcmp(comm, real_applications[i]) == 0) {
+            return true;  // This is a real application we care about
+        }
+    }
+    
+    // Blacklist of system processes that should always be ignored
+    static const char *system_processes[] = {
+        "systemd", "udevd", "dbus-daemon", "NetworkManager", "rsyslogd",
+        "cron", "sshd", "polkitd", "avahi-daemon", "systemd-logind",
+        "systemd-resolved", "systemd-udevd", "systemd-networkd", "systemd-timesyncd",
+        "runc", "containerd", "docker", "kubelet", "kube-proxy",
+        "stty", "cat", "echo", "dd", "tee", "socat", "nc", "netcat",
+        "lsof", "ps", "top", "htop", "iotop", "strace", "ltrace",
+        "gdb", "valgrind", "perf", "bpftool", "tty-egpf-monitor",
+        NULL
+    };
+    
+    // Check if this is a system process
+    for (int i = 0; system_processes[i] != NULL; i++) {
+        if (strcmp(comm, system_processes[i]) == 0) {
+            return false;  // This is a system process, ignore it
+        }
+    }
+    
+    // For unknown processes, use heuristics:
+    // - Too short names are probably not real apps
+    if (strlen(comm) < 2) return false;
+    
+    // - Names with numbers only are probably not real apps
+    bool all_digits = true;
+    for (size_t i = 0; i < strlen(comm); i++) {
+        if (!isdigit(comm[i])) {
+            all_digits = false;
+            break;
+        }
+    }
+    if (all_digits) return false;
+    
+    // - Names with special characters are probably not real apps
+    if (strchr(comm, '[') || strchr(comm, ']') || strchr(comm, ':') || strchr(comm, '(')) {
+        return false;
+    }
+    
+    // Default to treating unknown processes as real applications
+    // (they might be user scripts or custom programs)
+    return true;
+}
+
+static bool should_ignore_event(const struct event *e) {
+    // Always ignore our own events
+    if (e->tgid == self_tgid) return true;
+    
+    // Event type filtering:
+    // 1 = OPEN, 2 = CLOSE, 3 = READ, 4 = WRITE, 5 = IOCTL
+    
+    if (e->type == 1 || e->type == 2) {  // OPEN or CLOSE events
+        // Only process OPEN/CLOSE for real applications (not system tools)
+        return !is_real_application(e->comm);
+    }
+    
+    if (e->type == 3 || e->type == 4) {  // READ or WRITE events
+        // Only log READ/WRITE when we're in passive mode (real app using port)
+        if (e->port_idx < MAX_PORTS) {
+            return port_states[e->port_idx] == ST_ACTIVE;
+        }
+        return true;  // Ignore if port_idx is invalid
+    }
+    
+    if (e->type == 5) {  // IOCTL events
+        // IOCTL events are mostly system noise - only log for real applications
+        // and only when they're actually using the port
+        if (e->port_idx < MAX_PORTS) {
+            return !is_real_application(e->comm) || port_states[e->port_idx] == ST_ACTIVE;
+        }
+        return true;  // Ignore if port_idx is invalid
+    }
+    
+    return true;  // Ignore unknown event types
 }
 
 static void set_termios(int fd, int speed, int databits, char parity, int stopbits, bool hwflow) {
@@ -322,11 +421,14 @@ static void enter_passive_mode(uint32_t port_idx) {
     }
 }
 
-static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid) {
+static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid, const char *comm) {
     if (port_idx >= MAX_PORTS) return;
     
     // Ignore our own opens/closes
     if (tgid == self_tgid) return;
+    
+    // Double-check that this is a real application (defensive programming)
+    if (!is_real_application(comm)) return;
     
     if (event_type == 1) { // OPEN
         if (foreign_openers[port_idx] == 0 && port_states[port_idx] == ST_ACTIVE) {
@@ -552,12 +654,19 @@ static int handle_event(void *ctx, void *data, size_t len)
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
-    // Event type=%d, port_idx=%u, comm=%.16s
+    
+    // Apply smart filtering - ignore system noise
+    if (should_ignore_event(e)) {
+        pthread_mutex_unlock(&ports_mu);
+        return 0;  // Skip this event entirely
+    }
+    
+    // Log only meaningful events
     log_event_json(e);
     
-    // Handle port state transitions for active/passive monitoring
+    // Handle port state transitions only for real applications
     if (e->type == 1 || e->type == 2) { // OPEN or CLOSE events
-        handle_port_state_transition(e->port_idx, e->type, e->tgid);
+        handle_port_state_transition(e->port_idx, e->type, e->tgid, e->comm);
     }
     
     pthread_mutex_unlock(&ports_mu);
