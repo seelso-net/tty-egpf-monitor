@@ -232,7 +232,7 @@ static void log_event_json(const struct event *e)
     
     FILE *f = port_logs[idx];
     if (!f) {
-        fprintf(stderr, "DEBUG: No log file for port_idx=%u\n", idx);
+        // No log file for port_idx=%u
         return;
     }
     
@@ -278,7 +278,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
-    fprintf(stderr, "DEBUG: Event type=%d, port_idx=%u, comm=%.16s\n", e->type, e->port_idx, e->comm);
+            // Event type=%d, port_idx=%u, comm=%.16s
     log_event_json(e);
     pthread_mutex_unlock(&ports_mu);
     return 0;
@@ -303,8 +303,7 @@ static int sync_targets_map(void)
                 if (bpf_map_update_elem(td_fd, &i, &dev_t, BPF_ANY)) {
                     fprintf(stderr, "WARNING: Failed to update target_dev[%u] with dev_t %lu\n", i, (unsigned long)dev_t);
                 } else {
-                    fprintf(stderr, "DEBUG: Updated target_dev[%u] with dev_t %lu (major=%u, minor=%u)\n", 
-                            i, (unsigned long)dev_t, major(dev_t), minor(dev_t));
+                            // Updated target_dev[%u] with dev_t %lu (major=%u, minor=%u)
                 }
             } else {
                 fprintf(stderr, "WARNING: Failed to stat %s: %s\n", ports[i], strerror(errno));
@@ -365,12 +364,12 @@ static void load_config(void)
 {
     // Configuration persistence disabled - daemon starts fresh each session
     // No configuration is loaded from disk
-    fprintf(stderr, "DEBUG: Configuration persistence disabled - starting fresh\n");
+            // Configuration persistence disabled - starting fresh
 }
 
 static void reopen_existing_logs(void)
 {
-    fprintf(stderr, "DEBUG: reopen_existing_logs called, target_count=%u\n", target_count);
+            // reopen_existing_logs called, target_count=%u
     
     // Configuration persistence disabled - no config loaded from file
     // BPF maps start empty and are populated only via API calls
@@ -383,7 +382,7 @@ static void reopen_existing_logs(void)
         // Initialize target_count to 0
         uint32_t k0 = 0;
         if (bpf_map_update_elem(tc_fd, &k0, &target_count, BPF_ANY) == 0) {
-            fprintf(stderr, "DEBUG: Initialized BPF map target_count=%u\n", target_count);
+            // Initialized BPF map target_count=%u
         }
     }
     
@@ -395,7 +394,7 @@ static void reopen_existing_logs(void)
 static void *fd_scanner_thread(void *arg)
 {
     (void)arg;
-    fprintf(stderr, "DEBUG: FD scanner thread started\n");
+            // FD scanner thread started
     int scan_count = 0;
     while (!stop_flag) {
         pthread_mutex_lock(&ports_mu);
@@ -406,7 +405,7 @@ static void *fd_scanner_thread(void *arg)
         
         if (cnt > 0) {
             scan_count++;
-            fprintf(stderr, "DEBUG: FD scanner running scan #%d for %u devices\n", scan_count, cnt);
+            // FD scanner running scan #%d for %u devices
             for (uint32_t i=0;i<cnt;i++) {
                 if (devs[i][0] != '\0') scan_existing_fds(devs[i], i);
             }
@@ -414,10 +413,10 @@ static void *fd_scanner_thread(void *arg)
         
         // Sleep for 5 seconds between scans instead of 500ms to reduce CPU usage
         struct timespec req = { .tv_sec = 5, .tv_nsec = 0 }; // 5 seconds
-        fprintf(stderr, "DEBUG: FD scanner sleeping for 5 seconds...\n");
+        // FD scanner sleeping for 5 seconds...
         nanosleep(&req, NULL);
     }
-    fprintf(stderr, "DEBUG: FD scanner thread exiting\n");
+            // FD scanner thread exiting
     return NULL;
 }
 
@@ -425,8 +424,7 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    fprintf(stderr, "DEBUG: [%ld.%09ld] scan_existing_fds called for devpath='%s' (len=%zu), port_idx=%u\n", 
-            ts.tv_sec, ts.tv_nsec, devpath, strlen(devpath), port_idx);
+            // scan_existing_fds called for devpath='%s' (len=%zu), port_idx=%u
     
     // Alternative approach: use lsof to find processes with the device open
     // This avoids permission issues with /proc/*/fd/ directories
@@ -446,17 +444,17 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     }
     
     if (!lsof_cmd) {
-        fprintf(stderr, "DEBUG: lsof command not found in any standard location\n");
+        // lsof command not found in any standard location
         return;
     }
     
     snprintf(cmd, sizeof(cmd), "%s %s", lsof_cmd, devpath);
-    fprintf(stderr, "DEBUG: Using lsof command: %s\n", lsof_cmd);
-    fprintf(stderr, "DEBUG: Full command: %s\n", cmd);
+            // Using lsof command: %s
+        // Full command: %s
     
     FILE *lsof = popen(cmd, "r");
     if (!lsof) {
-        fprintf(stderr, "DEBUG: Failed to run lsof command: %s\n", strerror(errno));
+        // Failed to run lsof command: %s
         return;
     }
     
@@ -466,35 +464,35 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
     char line[512];
     int matches_found = 0;
     
-    fprintf(stderr, "DEBUG: Running lsof command: %s\n", cmd);
+            // Running lsof command: %s
     
     // Read all output from lsof, including any error messages
     int line_count = 0;
     int header_found = 0;
     while (fgets(line, sizeof(line), lsof)) {
         line_count++;
-        fprintf(stderr, "DEBUG: lsof output line %d: %s", line_count, line);
+        // lsof output line %d: %s
         
         // Skip warning lines that start with "lsof:" or contain "Output information may be incomplete"
         if (strstr(line, "lsof:") || strstr(line, "Output information may be incomplete")) {
-            fprintf(stderr, "DEBUG: Skipping warning line: %s", line);
+            // Skipping warning line: %s
             continue;
         }
         
         // Check if this is the header line (contains "COMMAND PID USER")
         if (strstr(line, "COMMAND") && strstr(line, "PID") && strstr(line, "USER")) {
-            fprintf(stderr, "DEBUG: Found header line: %s", line);
+            // Found header line: %s
             header_found = 1;
             continue;
         }
         
         // Only process data lines after we've found the header
         if (!header_found) {
-            fprintf(stderr, "DEBUG: Skipping line before header: %s", line);
+            // Skipping line before header: %s
             continue;
         }
         
-        fprintf(stderr, "DEBUG: Processing data line: %s", line);
+        // Processing data line: %s
         
         // Parse lsof output: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
         char command[64], user[64], fd_str[32], type[16], device[32], size[32], node[32], name[256];
@@ -512,8 +510,7 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                     struct fdkey k = { .tgid = tgid, .fd = fd };
                     uint8_t one = 1;
                     
-                fprintf(stderr, "DEBUG: Found matching fd %d in process %u (%s) for %s\n", 
-                        fd, tgid, command, devpath);
+                // Found matching fd %d in process %u (%s) for %s
                 
                     int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
                     int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
@@ -531,18 +528,17 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                     fprintf(stderr, "ERROR: fd_portidx map fd invalid\n");
                 }
             } else {
-                fprintf(stderr, "DEBUG: Skipping non-numeric fd: %s\n", fd_str);
+                // Skipping non-numeric fd: %s
             }
         } else {
-            fprintf(stderr, "DEBUG: Failed to parse lsof line (parsed %d fields): %s", parsed, line);
+            // Failed to parse lsof line (parsed %d fields): %s
         }
     }
     
     int exit_status = pclose(lsof);
-    fprintf(stderr, "DEBUG: lsof process exited with status: %d\n", exit_status);
+    // lsof process exited with status: %d
     
-    fprintf(stderr, "DEBUG: scan_existing_fds completed for %s: processed %d lines, header_found=%d, found %d matches\n", 
-            devpath, line_count, header_found, matches_found);
+    // scan_existing_fds completed for %s: processed %d lines, header_found=%d, found %d matches
 }
 
 static int api_remove_port(int idx, char *err, size_t errsz)
@@ -942,7 +938,7 @@ int main(int argc, char **argv)
     if (scratch4_fd >= 0) bpf_map_update_elem(scratch4_fd, &k0, &empty_open, BPF_ANY);
     if (scratch5_fd >= 0) bpf_map_update_elem(scratch5_fd, &k0, &empty_close, BPF_ANY);
     
-    fprintf(stderr, "Scratch buffers initialized\n");
+            // Scratch buffers initialized
     
     // Ensure exit read tracepoint is enabled for RX capture
     int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
@@ -962,82 +958,82 @@ int main(int argc, char **argv)
     }
 
     // DEBUG: Check individual program attachments
-    fprintf(stderr, "DEBUG: Checking individual BPF program attachments...\n");
+            // Checking individual BPF program attachments...
     
     // Check if programs are actually attached to tracepoints
     if (g_skel->links.tp_raw_sys_enter) {
-        fprintf(stderr, "DEBUG: tp_raw_sys_enter program attached to tracepoint\n");
+        // tp_raw_sys_enter program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_raw_sys_enter program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_raw_sys_exit) {
-        fprintf(stderr, "DEBUG: tp_raw_sys_exit program attached to tracepoint\n");
+        // tp_raw_sys_exit program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_raw_sys_exit program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_openat_tp) {
-        fprintf(stderr, "DEBUG: tp_enter_openat_tp program attached to tracepoint\n");
+        // tp_enter_openat_tp program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_openat_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_openat2_tp) {
-        fprintf(stderr, "DEBUG: tp_enter_openat2_tp program attached to tracepoint\n");
+        // tp_enter_openat2_tp program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_openat2_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_openat_tp) {
-        fprintf(stderr, "DEBUG: tp_exit_openat_tp program attached to tracepoint\n");
+        // tp_exit_openat_tp program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_exit_openat_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_openat2_tp) {
-        fprintf(stderr, "DEBUG: tp_exit_openat2_tp program attached to tracepoint\n");
+        // tp_exit_openat2_tp program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_exit_openat2_tp program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_close) {
-        fprintf(stderr, "DEBUG: tp_enter_close program attached to tracepoint\n");
+        // tp_enter_close program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_close program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_close) {
-        fprintf(stderr, "DEBUG: tp_exit_close program attached to tracepoint\n");
+        // tp_exit_close program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_exit_close program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_write) {
-        fprintf(stderr, "DEBUG: tp_enter_write program attached to tracepoint\n");
+        // tp_enter_write program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_write program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_read) {
-        fprintf(stderr, "DEBUG: tp_enter_read program attached to tracepoint\n");
+        // tp_enter_read program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_read program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_exit_read) {
-        fprintf(stderr, "DEBUG: tp_exit_read program attached to tracepoint\n");
+        // tp_exit_read program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_exit_read program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_enter_ioctl) {
-        fprintf(stderr, "DEBUG: tp_enter_ioctl program attached to tracepoint\n");
+        // tp_enter_ioctl program attached to tracepoint
     } else {
         fprintf(stderr, "ERROR: tp_enter_ioctl program NOT attached to tracepoint\n");
     }
     
-    fprintf(stderr, "DEBUG: Individual BPF program attachment check completed\n");
+            // Individual BPF program attachment check completed
 
     // Reopen log files for already configured ports
     reopen_existing_logs();
