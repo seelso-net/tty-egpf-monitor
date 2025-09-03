@@ -781,11 +781,12 @@ jobs:
         # Create separate pool directories for each distribution
         mkdir -p /tmp/apt-repo/pool/noble
         mkdir -p /tmp/apt-repo/pool/jammy
-        # Clean previous packages to avoid stale versions
-        rm -f /tmp/apt-repo/pool/noble/*.deb || true
-        rm -f /tmp/apt-repo/pool/jammy/*.deb || true
+        # Keep previous packages to maintain version history
+        # Only clean if we're replacing the same version
+        echo "Preserving existing packages for version history"
         
         # Copy packages to their respective pools (fail if none found)
+        # This preserves version history - older versions remain available via APT
         N_FOUND=0
         while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/noble/; N_FOUND=$((N_FOUND+1)); done < <(find packages/noble -type f -name "*~noble.deb" 2>/dev/null)
         while IFS= read -r f; do cp "$f" /tmp/apt-repo/pool/jammy/; N_FOUND=$((N_FOUND+1)); done < <(find packages/jammy -type f -name "*~jammy.deb" 2>/dev/null)

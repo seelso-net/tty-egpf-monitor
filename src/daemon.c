@@ -524,16 +524,15 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     target_count++;
     int rc = sync_targets_map();
     write_info_line(idx);
-    pthread_mutex_unlock(&ports_mu);
-    if (rc) { snprintf(err, errsz, "sync map failed"); return -1; }
     
     // Scan existing processes for already-open fds to this device
     scan_existing_fds(devpath, idx);
     
     // Try to enter active mode initially if port is free
-    pthread_mutex_unlock(&ports_mu);
     enter_active_mode(idx);
-    pthread_mutex_lock(&ports_mu);
+    
+    pthread_mutex_unlock(&ports_mu);
+    if (rc) { snprintf(err, errsz, "sync map failed"); return -1; }
     
     return (int)idx;
 }
