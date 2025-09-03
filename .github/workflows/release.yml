@@ -510,13 +510,25 @@ jobs:
           echo "Trying simple build..."
           make -j$(nproc) 2>&1 | head -20 || true
           
+          # Look for the binary in multiple possible locations
+          BPFTOOL_BIN=""
           if [ -f "bpftool" ]; then
-            echo "✅ bpftool built successfully!"
-            install -m 0755 bpftool /usr/local/bin/bpftool
+            BPFTOOL_BIN="bpftool"
+          elif [ -f "src/bpftool" ]; then
+            BPFTOOL_BIN="src/bpftool"
+          elif [ -f "../src/bpftool" ]; then
+            BPFTOOL_BIN="../src/bpftool"
           else
+            echo "Searching for bpftool binary..."
+            find . -name "bpftool" -type f 2>/dev/null | head -10
+            find .. -name "bpftool" -type f 2>/dev/null | head -10
             echo "ERROR: bpftool binary not found after building from src/"
-            find . -name "bpftool" -type f
             exit 1
+          fi
+          
+          if [ -n "$BPFTOOL_BIN" ]; then
+            echo "✅ bpftool found at: $BPFTOOL_BIN"
+            install -m 0755 "$BPFTOOL_BIN" /usr/local/bin/bpftool
           fi
           cd ..
         elif [ -f "Makefile" ]; then
