@@ -297,6 +297,13 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct fdkey k = { .tgid = tgid, .fd = fd };
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) return 0;
+        /* Emit OPEN once on first usage (ioctl) */
+        __u8 *em3 = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (!em3) {
+            __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
+            struct event *o3 = bpf_ringbuf_reserve(&events, sizeof(*o3), 0);
+            if (o3) { fill_common(o3, EV_OPEN); o3->cmd=0; o3->ret=0; o3->dir=0; o3->port_idx=*idxp; o3->data_len=0; o3->data_trunc=0; bpf_ringbuf_submit(o3, 0); }
+        }
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (!e) return 0;
         fill_common(e, EV_IOCTL);
@@ -464,8 +471,8 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
@@ -669,7 +676,7 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
         if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=0; o2->dir=0; o2->port_idx=*idxp; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
     }
 
-    size_t cap = ret > MAX_DATA ? MAX_DATA : ret;
+    /* For reliability across kernels/verifier, do not copy DEV->APP payload here */
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) {
         bpf_map_delete_elem(&rd_ctx, &tgid);
@@ -679,8 +686,8 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
     fill_common(e, EV_READ);
     e->dir = 0; e->ret = ret; e->cmd = 0;
     e->port_idx = *idxp;
-    e->data_len = cap; e->data_trunc = ret > MAX_DATA ? (ret - MAX_DATA) : 0;
-    if (cap && rc->buf) bpf_probe_read_user(e->data, cap, rc->buf);
+    e->data_len = 0; /* payload omitted to satisfy older verifiers */
+    e->data_trunc = 0;
     bpf_ringbuf_submit(e, 0);
 
     bpf_map_delete_elem(&rd_ctx, &tgid);
