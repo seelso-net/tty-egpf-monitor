@@ -28,12 +28,12 @@ static int unix_connect_socket(const char *sockpath)
     return s;
 }
 
-static int http_post_add_port(const char *sock, const char *dev, const char *log)
+static int http_post_add_port(const char *sock, const char *dev, const char *log, int baudrate)
 {
     int s = unix_connect_socket(sock);
     if (s < 0) return 1;
     char body[512];
-    snprintf(body, sizeof(body), "{\"dev\":\"%s\",\"log\":\"%s\"}", dev, log);
+    snprintf(body, sizeof(body), "{\"dev\":\"%s\",\"log\":\"%s\",\"baudrate\":%d}", dev, log, baudrate);
     dprintf(s, "POST /ports HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s", strlen(body), body);
     char buf[4096]; ssize_t n;
     while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
@@ -90,11 +90,11 @@ static void usage(const char *p)
     fprintf(stderr,
         "Usage: %s [--socket %s] <command> [args]\n"
         "Commands:\n"
-        "  add <dev> [logfile]      Add monitored port; default log in daemon log dir\n"
-        "  list                      List configured ports\n"
-        "  logs <idx>                Download full NDJSON log for port idx\n"
-        "  stream <idx>              Live stream log for port idx (chunked)\n"
-        "  remove <idx|dev>          Remove by index or device path\n",
+        "  add <dev> [baudrate] [logfile]  Add monitored port; default baud: 115200\n"
+        "  list                              List configured ports\n"
+        "  logs <idx>                        Download full log for port idx\n"
+        "  stream <idx>                      Live stream log for port idx (chunked)\n"
+        "  remove <idx|dev>                  Remove by index or device path\n",
         p, DEFAULT_SOCKET_PATH);
 }
 
@@ -111,8 +111,25 @@ int main(int argc, char **argv)
     if (!strcmp(cmd, "add")) {
         if (i >= argc) { usage(argv[0]); return 2; }
         const char *dev = argv[i++];
-        const char *log = (i < argc) ? argv[i++] : "";
-        return http_post_add_port(sock, dev, log);
+        int baudrate = 115200;  // Default baudrate
+        const char *log = "";
+        
+        // Check if next argument is baudrate (numeric)
+        if (i < argc) {
+            char *endp = NULL;
+            long baud = strtol(argv[i], &endp, 10);
+            if (endp && *endp == '\0' && baud > 0) {
+                baudrate = (int)baud;
+                i++;
+            }
+        }
+        
+        // Check if next argument is log file
+        if (i < argc) {
+            log = argv[i++];
+        }
+        
+        return http_post_add_port(sock, dev, log, baudrate);
     } else if (!strcmp(cmd, "list")) {
         return http_get_ports(sock);
     } else if (!strcmp(cmd, "logs")) {

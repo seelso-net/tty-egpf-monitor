@@ -50,6 +50,18 @@ struct close_ctx { int32_t fd; };
 #define DEFAULT_SOCKET_PATH "/run/tty-egpf-monitord.sock"
 #define DEFAULT_LOG_DIR "/var/log/tty-egpf-monitor"
 
+// Logging modes
+#define LOG_MODE_SIMPLE 0  // Simple, human-readable logs
+#define LOG_MODE_ADVANCED 1  // Detailed, machine-readable logs
+#define DEFAULT_LOG_MODE LOG_MODE_SIMPLE
+
+// Default TTY settings
+#define DEFAULT_BAUDRATE 115200
+#define DEFAULT_DATABITS 8
+#define DEFAULT_PARITY 'N'
+#define DEFAULT_STOPBITS 1
+#define DEFAULT_HWFLOW false
+
 struct event {
     uint64_t ts, dev;
     uint32_t pid, tgid;
@@ -75,8 +87,10 @@ static char ports[MAX_PORTS][256];
 static char log_paths[MAX_PORTS][512];
 static FILE *port_logs[MAX_PORTS];
 static uint32_t target_count = 0;
+static int port_baudrates[MAX_PORTS];  // Baudrate for each port
 static char g_socket_path[256] = DEFAULT_SOCKET_PATH;
 static char g_log_dir[256] = DEFAULT_LOG_DIR;
+static int g_log_mode = DEFAULT_LOG_MODE;  // Current logging mode
 
 // Active monitoring state
 enum { ST_ACTIVE=1, ST_PASSIVE=2 };
@@ -84,6 +98,7 @@ static int port_states[MAX_PORTS] = {0}; // State for each port
 static int active_fds[MAX_PORTS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 static pthread_t active_reader_threads[MAX_PORTS];
 static int foreign_openers[MAX_PORTS] = {0}; // Count of foreign processes using each port
+static int port_baudrates[MAX_PORTS]; // Baudrate for each port
 static uint32_t self_tgid = 0; // Our own process ID to ignore our own opens/closes
 
 // Forward declarations
@@ -100,21 +115,62 @@ static void write_info_line(uint32_t idx)
 {
     if (idx >= MAX_PORTS || !port_logs[idx] || ports[idx][0] == '\0') return;
     struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-    int baud = -1;
-    char cmd[512]; snprintf(cmd, sizeof(cmd), "stty -F %s -a 2>/dev/null", ports[idx]);
-    FILE *pf = popen(cmd, "r");
-    if (pf) {
-        char line[1024];
-        if (fgets(line, sizeof(line), pf)) {
-            const char *sp = strstr(line, "speed ");
-            if (sp) { sp += 6; baud = atoi(sp); }
+    
+    if (g_log_mode == LOG_MODE_SIMPLE) {
+        // Simple, human-readable format
+        fprintf(port_logs[idx], "[%s] Monitoring started: %s (baud: %d)\n", 
+                ctime(&ts.tv_sec), ports[idx], port_baudrates[idx]);
+    } else {
+        // Advanced, machine-readable format
+        int baud = -1;
+        char cmd[512]; snprintf(cmd, sizeof(cmd), "stty -F %s -a 2>/dev/null", ports[idx]);
+        FILE *pf = popen(cmd, "r");
+        if (pf) {
+            char line[1024];
+            if (fgets(line, sizeof(line), pf)) {
+                const char *sp = strstr(line, "speed ");
+                if (sp) { sp += 6; baud = atoi(sp); }
+            }
+            pclose(pf);
         }
-        pclose(pf);
+        fprintf(port_logs[idx],
+                "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"unknown\",\"baud\":%d}\n",
+                (uint64_t)ts.tv_sec, ts.tv_nsec, ports[idx], baud);
     }
-    fprintf(port_logs[idx],
-            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"unknown\",\"baud\":%d}\n",
-            (uint64_t)ts.tv_sec, ts.tv_nsec, ports[idx], baud);
     fflush(port_logs[idx]);
+}
+
+// Simple logging functions for different log modes
+static void log_simple_event(uint32_t port_idx, const char *event_type, const char *details) {
+    if (port_idx >= MAX_PORTS || !port_logs[port_idx]) return;
+    struct timespec ts; 
+    clock_gettime(CLOCK_REALTIME, &ts);
+    
+    if (g_log_mode == LOG_MODE_SIMPLE) {
+        fprintf(port_logs[port_idx], "[%s] %s: %s\n", 
+                ctime(&ts.tv_sec), event_type, details);
+    }
+    fflush(port_logs[port_idx]);
+}
+
+static void log_simple_data(uint32_t port_idx, const char *direction, const char *data, size_t len) {
+    if (port_idx >= MAX_PORTS || !port_logs[port_idx]) return;
+    struct timespec ts; 
+    clock_gettime(CLOCK_REALTIME, &ts);
+    
+    if (g_log_mode == LOG_MODE_SIMPLE) {
+        fprintf(port_logs[port_idx], "[%s] %s: ", ctime(&ts.tv_sec), direction);
+        for (size_t i = 0; i < len && i < 32; i++) {  // Limit to 32 chars for readability
+            if (data[i] >= 32 && data[i] <= 126) {
+                fprintf(port_logs[port_idx], "%c", data[i]);
+            } else {
+                fprintf(port_logs[port_idx], "\\x%02x", (unsigned char)data[i]);
+            }
+        }
+        if (len > 32) fprintf(port_logs[port_idx], "...");
+        fprintf(port_logs[port_idx], "\n");
+    }
+    fflush(port_logs[port_idx]);
 }
 
 static void set_termios(int fd, int speed, int databits, char parity, int stopbits, bool hwflow) {
@@ -174,13 +230,17 @@ static void *active_reader(void *arg) {
             // Log the active read data
             pthread_mutex_lock(&ports_mu);
             if (port_logs[port_idx]) {
-                fprintf(port_logs[port_idx],
-                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"active_read\",\"port_idx\":%u,\"n\":%zd,\"data\":\"",
-                        (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx, n);
-                for (ssize_t i = 0; i < n; i++) {
-                    fprintf(port_logs[port_idx], "%02x", buf[i]);
+                if (g_log_mode == LOG_MODE_SIMPLE) {
+                    log_simple_data(port_idx, "ACTIVE_READ", (char*)buf, n);
+                } else {
+                    fprintf(port_logs[port_idx],
+                            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"active_read\",\"port_idx\":%u,\"n\":%zd,\"data\":\"",
+                            (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx, n);
+                    for (ssize_t i = 0; i < n; i++) {
+                        fprintf(port_logs[port_idx], "%02x", buf[i]);
+                    }
+                    fprintf(port_logs[port_idx], "\"}\n");
                 }
-                fprintf(port_logs[port_idx], "\"}\n");
                 fflush(port_logs[port_idx]);
             }
             pthread_mutex_unlock(&ports_mu);
@@ -202,8 +262,8 @@ static void enter_active_mode(uint32_t port_idx) {
     // Try to open the port for active reading
     active_fds[port_idx] = open(ports[port_idx], O_RDONLY | O_NOCTTY | O_NONBLOCK);
     if (active_fds[port_idx] >= 0) {
-        // Configure termios with default settings (can be made configurable later)
-        set_termios(active_fds[port_idx], 115200, 8, 'N', 1, false);
+        // Configure termios with stored baudrate for this port
+        set_termios(active_fds[port_idx], port_baudrates[port_idx], DEFAULT_DATABITS, DEFAULT_PARITY, DEFAULT_STOPBITS, DEFAULT_HWFLOW);
         
         // Create reader thread
         if (pthread_create(&active_reader_threads[port_idx], NULL, active_reader, (void*)(uintptr_t)port_idx) == 0) {
@@ -212,11 +272,15 @@ static void enter_active_mode(uint32_t port_idx) {
             
             // Update log to show active mode
             if (port_logs[port_idx]) {
-                struct timespec ts; 
-                clock_gettime(CLOCK_REALTIME, &ts);
-                fprintf(port_logs[port_idx],
-                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"active\"}\n",
-                        (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+                if (g_log_mode == LOG_MODE_SIMPLE) {
+                    log_simple_event(port_idx, "MODE_CHANGE", "ACTIVE mode (port free)");
+                } else {
+                    struct timespec ts; 
+                    clock_gettime(CLOCK_REALTIME, &ts);
+                    fprintf(port_logs[port_idx],
+                            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"active\"}\n",
+                            (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+                }
                 fflush(port_logs[port_idx]);
             }
         } else {
@@ -244,11 +308,15 @@ static void enter_passive_mode(uint32_t port_idx) {
         
         // Update log to show passive mode
         if (port_logs[port_idx]) {
-            struct timespec ts; 
-            clock_gettime(CLOCK_REALTIME, &ts);
-            fprintf(port_logs[port_idx],
-                    "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"passive\"}\n",
-                    (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+            if (g_log_mode == LOG_MODE_SIMPLE) {
+                log_simple_event(port_idx, "MODE_CHANGE", "PASSIVE mode (foreign process using port)");
+            } else {
+                struct timespec ts; 
+                clock_gettime(CLOCK_REALTIME, &ts);
+                fprintf(port_logs[port_idx],
+                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"passive\"}\n",
+                        (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+            }
             fflush(port_logs[port_idx]);
         }
     }
@@ -415,30 +483,63 @@ static void log_event_json(const struct event *e)
         return;
     }
     
-    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-    const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
-    fprintf(f,
-        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"%s\",\"pid\":%u,\"tgid\":%u,\"comm\":\"%.*s\",\"port_idx\":%u",
-        (uint64_t)ts.tv_sec, ts.tv_nsec, etype, e->pid, e->tgid, 16, e->comm, idx);
+    if (g_log_mode == LOG_MODE_SIMPLE) {
+        // Simple, human-readable format
+        struct timespec ts; 
+        clock_gettime(CLOCK_REALTIME, &ts);
+        const char *etype = e->type==1?"OPEN":e->type==2?"CLOSE":e->type==3?"READ":e->type==4?"WRITE":"IOCTL";
         
-    if (e->type == 3 || e->type == 4) {
-        // CRITICAL: Validate data_len to prevent buffer overrun crashes
-        if (e->data_len > MAX_DATA) {
-            fprintf(stderr, "ERROR: Invalid data_len=%u > MAX_DATA=%d\n", e->data_len, MAX_DATA);
-            fprintf(f, ",\"error\":\"data_len_invalid\"");
-        } else {
-            fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":\"",
-                    e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
-            // Safe data output with bounds checking
-            for (unsigned i = 0; i < e->data_len && i < MAX_DATA; i++) {
-                fprintf(f, "%02x", e->data[i]);
+        if (e->type == 1) { // OPEN
+            fprintf(f, "[%s] %s: %s opened port (baud: %d)\n", 
+                    ctime(&ts.tv_sec), etype, e->comm, port_baudrates[idx]);
+        } else if (e->type == 2) { // CLOSE
+            fprintf(f, "[%s] %s: %s closed port\n", 
+                    ctime(&ts.tv_sec), etype, e->comm);
+        } else if (e->type == 3 || e->type == 4) { // READ/WRITE
+            const char *dir = e->type==4?"APP->DEV":"DEV->APP";
+            fprintf(f, "[%s] %s: %s %s ", ctime(&ts.tv_sec), etype, e->comm, dir);
+            
+            // Show data in readable format
+            for (unsigned i = 0; i < e->data_len && i < 32; i++) {
+                if (e->data[i] >= 32 && e->data[i] <= 126) {
+                    fprintf(f, "%c", e->data[i]);
+                } else {
+                    fprintf(f, "\\x%02x", e->data[i]);
+                }
             }
-            fprintf(f, "\"");
+            if (e->data_len > 32) fprintf(f, "...");
+            fprintf(f, "\n");
+        } else if (e->type == 5) { // IOCTL
+            fprintf(f, "[%s] %s: %s ioctl cmd=0x%x\n", 
+                    ctime(&ts.tv_sec), etype, e->comm, e->cmd);
         }
-    } else if (e->type == 5) {
-        fprintf(f, ",\"cmd\":%u", e->cmd);
+    } else {
+        // Advanced, machine-readable format (original JSON)
+        struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
+        const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
+        fprintf(f,
+            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"%s\",\"pid\":%u,\"tgid\":%u,\"comm\":\"%.*s\",\"port_idx\":%u",
+            (uint64_t)ts.tv_sec, ts.tv_nsec, etype, e->pid, e->tgid, 16, e->comm, idx);
+            
+        if (e->type == 3 || e->type == 4) {
+            // CRITICAL: Validate data_len to prevent buffer overrun crashes
+            if (e->data_len > MAX_DATA) {
+                fprintf(stderr, "ERROR: Invalid data_len=%u > MAX_DATA=%d\n", e->data_len, MAX_DATA);
+                fprintf(f, ",\"error\":\"data_len_invalid\"");
+            } else {
+                fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":\"",
+                        e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
+                // Safe data output with bounds checking
+                for (unsigned i = 0; i < e->data_len && i < MAX_DATA; i++) {
+                    fprintf(f, "%02x", e->data[i]);
+                }
+                fprintf(f, "\"");
+            }
+        } else if (e->type == 5) {
+            fprintf(f, ",\"cmd\":%u", e->cmd);
+        }
+        fprintf(f, "}\n");
     }
-    fprintf(f, "}\n");
     fflush(f);
 }
 
@@ -498,12 +599,16 @@ static int sync_targets_map(void)
     return 0;
 }
 
-static int api_add_port(const char *devpath, const char *logpath, char *err, size_t errsz)
+static int api_add_port(const char *devpath, const char *logpath, int baudrate, char *err, size_t errsz)
 {
     pthread_mutex_lock(&ports_mu);
     uint32_t idx = target_count;
     if (idx >= MAX_PORTS) { snprintf(err, errsz, "max ports reached"); pthread_mutex_unlock(&ports_mu); return -1; }
     normalize_path(devpath, ports[idx], sizeof(ports[idx]));
+    
+    // Store baudrate for this port
+    port_baudrates[idx] = baudrate;
+    
     char pathbuf[512];
     const char *use_log = logpath && logpath[0] ? logpath : NULL;
     if (!use_log) {
@@ -518,7 +623,9 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     char abs_log_path[1024];
     if (use_log[0] == '/') snprintf(abs_log_path, sizeof(abs_log_path), "%s", use_log);
     else snprintf(abs_log_path, sizeof(abs_log_path), "%s/%s", g_log_dir, use_log);
-    FILE *f = fopen(abs_log_path, "a");
+    
+    // Truncate log file on opening (unless it's a unique filename)
+    FILE *f = fopen(abs_log_path, "w");  // "w" truncates, "a" appends
     if (!f) { snprintf(err, errsz, "log open: %s", strerror(errno)); ports[idx][0]='\0'; pthread_mutex_unlock(&ports_mu); return -1; }
     port_logs[idx] = f;
     target_count++;
@@ -924,14 +1031,19 @@ static void handle_http_client(int cfd)
         if (!body) { http_send(cfd, 400, "text/plain", "bad request"); close(cfd); return; }
         body += 4;
         char dev[256] = {0}, logp[512] = {0};
+        int baudrate = DEFAULT_BAUDRATE;  // Default baudrate
         // naive JSON extraction
         char *dp = strstr(body, "\"dev\"");
         char *lp = strstr(body, "\"log\"");
+        char *bp = strstr(body, "\"baudrate\"");
         if (dp) {
             dp = strchr(dp, ':'); if (dp) { dp++; while (*dp==' '||*dp=='\t') dp++; if (*dp=='\"') { dp++; char *e=strchr(dp,'\"'); if (e) { size_t l=e-dp; if (l>=sizeof(dev)) l=sizeof(dev)-1; memcpy(dev,dp,l); } } }
         }
         if (lp) {
             lp = strchr(lp, ':'); if (lp) { lp++; while (*lp==' '||*lp=='\t') lp++; if (*lp=='\"') { lp++; char *e=strchr(lp,'\"'); if (e) { size_t l=e-lp; if (l>=sizeof(logp)) l=sizeof(logp)-1; memcpy(logp,lp,l); } } }
+        }
+        if (bp) {
+            bp = strchr(bp, ':'); if (bp) { bp++; while (*bp==' '||*bp=='\t') bp++; char *e = strchr(bp, ','); if (!e) e = strchr(bp, '}'); if (e) { size_t l = e-bp; if (l < 16) { char baud_str[16]; memcpy(baud_str, bp, l); baud_str[l] = '\0'; baudrate = atoi(baud_str); } } }
         }
         if (!dev[0]) { http_send(cfd, 400, "text/plain", "missing dev"); close(cfd); return; }
         // Generate default log path if not provided
@@ -941,7 +1053,7 @@ static void handle_http_client(int cfd)
             snprintf(logp, sizeof(logp), "%s/%s.jsonl", g_log_dir, base);
         }
         char err[128];
-        int idx = api_add_port(dev, logp, err, sizeof err);
+        int idx = api_add_port(dev, logp, baudrate, err, sizeof err);
         if (idx < 0) { http_send(cfd, 400, "text/plain", err); }
         else {
             char resp[64]; snprintf(resp, sizeof resp, "{\"idx\":%d}", idx);
@@ -1029,8 +1141,18 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--log-dir") && i+1<argc) {
             snprintf(g_log_dir, sizeof(g_log_dir), "%s", argv[++i]);
         }
+        else if (!strcmp(argv[i], "--log-mode") && i+1<argc) {
+            if (!strcmp(argv[++i], "simple")) {
+                g_log_mode = LOG_MODE_SIMPLE;
+            } else if (!strcmp(argv[i], "advanced")) {
+                g_log_mode = LOG_MODE_ADVANCED;
+            } else {
+                fprintf(stderr, "Invalid log mode: %s (use 'simple' or 'advanced')\n", argv[i]);
+                return 2;
+            }
+        }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            fprintf(stderr, "Usage: %s [--socket %s] [--log-dir %s]\n", argv[0], DEFAULT_SOCKET_PATH, DEFAULT_LOG_DIR);
+            fprintf(stderr, "Usage: %s [--socket %s] [--log-dir %s] [--log-mode simple|advanced]\n", argv[0], DEFAULT_SOCKET_PATH, DEFAULT_LOG_DIR);
             return 0;
         } else {
             fprintf(stderr, "Unknown arg: %s\n", argv[i]);
@@ -1116,6 +1238,11 @@ int main(int argc, char **argv)
     }
     
     fprintf(stderr, "BPF skeleton loaded successfully\n");
+    
+    // Initialize port baudrates with default values
+    for (uint32_t i = 0; i < MAX_PORTS; i++) {
+        port_baudrates[i] = DEFAULT_BAUDRATE;
+    }
     
     // Initialize scratch buffers - these are required for the BPF program to function
     // The BPF program uses these as temporary storage and will fail if they're empty
