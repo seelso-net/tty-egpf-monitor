@@ -488,8 +488,43 @@ jobs:
         rm -rf /tmp/bpftool-src
         git clone --depth 1 --recurse-submodules https://github.com/libbpf/bpftool.git /tmp/bpftool-src
         cd /tmp/bpftool-src
-        make -j$(nproc)
-        install -m 0755 src/bpftool /usr/local/bin/bpftool
+        echo "Checking bpftool source structure..."
+        ls -la
+        echo "Looking for Makefile..."
+        find . -name "Makefile" -o -name "makefile" -o -name "*.mk" | head -10
+        echo "Checking if we need to bootstrap..."
+        if [ -f "Makefile" ]; then
+          echo "Makefile found, building..."
+          make -j$(nproc)
+          if [ -f "src/bpftool" ]; then
+            install -m 0755 src/bpftool /usr/local/bin/bpftool
+          elif [ -f "bpftool" ]; then
+            install -m 0755 bpftool /usr/local/bin/bpftool
+          else
+            echo "ERROR: bpftool binary not found after build"
+            find . -name "bpftool" -type f
+            exit 1
+          fi
+        elif [ -f "bootstrap.sh" ]; then
+          echo "Bootstrap script found, running..."
+          chmod +x bootstrap.sh
+          ./bootstrap.sh
+          make -j$(nproc)
+          if [ -f "src/bpftool" ]; then
+            install -m 0755 src/bpftool /usr/local/bin/bpftool
+          elif [ -f "bpftool" ]; then
+            install -m 0755 bpftool /usr/local/bin/bpftool
+          else
+            echo "ERROR: bpftool binary not found after bootstrap build"
+            find . -name "bpftool" -type f
+            exit 1
+          fi
+        else
+          echo "ERROR: No Makefile or bootstrap script found"
+          echo "Available files:"
+          ls -la
+          exit 1
+        fi
         cd -
         rm -rf /tmp/bpftool-src
         
