@@ -23,6 +23,8 @@
 #include <dirent.h>
 #include <ctype.h>
 #include <limits.h>
+#include <termios.h>
+#include <poll.h>
 // #include <systemd/sd-daemon.h>  // Commented out for Ubuntu 22.04 compatibility
 
 #include <bpf/libbpf.h>
@@ -76,10 +78,23 @@ static uint32_t target_count = 0;
 static char g_socket_path[256] = DEFAULT_SOCKET_PATH;
 static char g_log_dir[256] = DEFAULT_LOG_DIR;
 
+// Active monitoring state
+enum { ST_ACTIVE=1, ST_PASSIVE=2 };
+static int port_states[MAX_PORTS] = {0}; // State for each port
+static int active_fds[MAX_PORTS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+static pthread_t active_reader_threads[MAX_PORTS];
+static int foreign_openers[MAX_PORTS] = {0}; // Count of foreign processes using each port
+static uint32_t self_tgid = 0; // Our own process ID to ignore our own opens/closes
+
 // Forward declarations
 static void save_config(void);
 static void load_config(void);
 static void scan_existing_fds(const char *devpath, uint32_t port_idx);
+static void set_termios(int fd, int speed, int databits, char parity, int stopbits, bool hwflow);
+static void *active_reader(void *arg);
+static void enter_active_mode(uint32_t port_idx);
+static void enter_passive_mode(uint32_t port_idx);
+static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid);
 
 static void write_info_line(uint32_t idx)
 {
@@ -97,9 +112,167 @@ static void write_info_line(uint32_t idx)
         pclose(pf);
     }
     fprintf(port_logs[idx],
-            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"passive\",\"baud\":%d}\n",
+            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"monitoring_started\",\"device\":\"%s\",\"mode\":\"unknown\",\"baud\":%d}\n",
             (uint64_t)ts.tv_sec, ts.tv_nsec, ports[idx], baud);
     fflush(port_logs[idx]);
+}
+
+static void set_termios(int fd, int speed, int databits, char parity, int stopbits, bool hwflow) {
+    struct termios tio;
+    if (tcgetattr(fd, &tio) == -1) {
+        fprintf(stderr, "WARNING: tcgetattr failed: %s\n", strerror(errno));
+        return;
+    }
+    cfmakeraw(&tio);
+
+    speed_t sp;
+    switch (speed) {
+        case 9600: sp = B9600; break;
+        case 19200: sp = B19200; break;
+        case 38400: sp = B38400; break;
+        case 57600: sp = B57600; break;
+        case 115200: sp = B115200; break;
+        case 230400: sp = B230400; break;
+        case 460800: sp = B460800; break;
+        case 921600: sp = B921600; break;
+        default: sp = B115200; fprintf(stderr, "WARNING: Unsupported speed %d, defaulting to 115200\n", speed);
+    }
+    cfsetispeed(&tio, sp);
+    cfsetospeed(&tio, sp);
+
+    tio.c_cflag &= ~CSIZE;
+    tio.c_cflag |= (databits == 7 ? CS7 : CS8);
+
+    // Parity
+    tio.c_cflag &= ~(PARENB|PARODD);
+    tio.c_iflag &= ~(INPCK|ISTRIP);
+    if (parity == 'E' || parity == 'e')      tio.c_cflag |= PARENB;
+    else if (parity == 'O' || parity == 'o') tio.c_cflag |= PARENB | PARODD;
+
+    // Stop bits
+    if (stopbits == 2) tio.c_cflag |= CSTOPB; else tio.c_cflag &= ~CSTOPB;
+
+    // Flow control
+    if (hwflow) tio.c_cflag |= CRTSCTS; else tio.c_cflag &= ~CRTSCTS;
+    tio.c_iflag &= ~(IXON|IXOFF|IXANY);
+
+    if (tcsetattr(fd, TCSANOW, &tio) == -1) {
+        fprintf(stderr, "WARNING: tcsetattr failed: %s\n", strerror(errno));
+    }
+}
+
+static void *active_reader(void *arg) {
+    uint32_t port_idx = (uint32_t)(uintptr_t)arg;
+    unsigned char buf[4096];
+    
+    while (!stop_flag && active_fds[port_idx] >= 0) {
+        ssize_t n = read(active_fds[port_idx], buf, sizeof buf);
+        if (n > 0) {
+            struct timespec ts; 
+            clock_gettime(CLOCK_REALTIME, &ts);
+            
+            // Log the active read data
+            pthread_mutex_lock(&ports_mu);
+            if (port_logs[port_idx]) {
+                fprintf(port_logs[port_idx],
+                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"active_read\",\"port_idx\":%u,\"n\":%zd,\"data\":\"",
+                        (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx, n);
+                for (ssize_t i = 0; i < n; i++) {
+                    fprintf(port_logs[port_idx], "%02x", buf[i]);
+                }
+                fprintf(port_logs[port_idx], "\"}\n");
+                fflush(port_logs[port_idx]);
+            }
+            pthread_mutex_unlock(&ports_mu);
+        } else if (n == 0) {
+            usleep(1000); // 1ms sleep on EOF
+        } else {
+            if (errno == EAGAIN || errno == EINTR) continue;
+            if (errno == EBADF) break;  // fd closed by main thread; exit cleanly
+            fprintf(stderr, "WARNING: Active read error on port %u: %s\n", port_idx, strerror(errno));
+            break;
+        }
+    }
+    return NULL;
+}
+
+static void enter_active_mode(uint32_t port_idx) {
+    if (port_idx >= MAX_PORTS || ports[port_idx][0] == '\0') return;
+    
+    // Try to open the port for active reading
+    active_fds[port_idx] = open(ports[port_idx], O_RDONLY | O_NOCTTY | O_NONBLOCK);
+    if (active_fds[port_idx] >= 0) {
+        // Configure termios with default settings (can be made configurable later)
+        set_termios(active_fds[port_idx], 115200, 8, 'N', 1, false);
+        
+        // Create reader thread
+        if (pthread_create(&active_reader_threads[port_idx], NULL, active_reader, (void*)(uintptr_t)port_idx) == 0) {
+            port_states[port_idx] = ST_ACTIVE;
+            fprintf(stderr, "[state] Port %u: PASSIVE -> ACTIVE (opened %s)\n", port_idx, ports[port_idx]);
+            
+            // Update log to show active mode
+            if (port_logs[port_idx]) {
+                struct timespec ts; 
+                clock_gettime(CLOCK_REALTIME, &ts);
+                fprintf(port_logs[port_idx],
+                        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"active\"}\n",
+                        (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+                fflush(port_logs[port_idx]);
+            }
+        } else {
+            fprintf(stderr, "ERROR: Failed to create active reader thread for port %u\n", port_idx);
+            close(active_fds[port_idx]);
+            active_fds[port_idx] = -1;
+        }
+    } else {
+        fprintf(stderr, "WARNING: Failed to open %s for active mode: %s\n", ports[port_idx], strerror(errno));
+    }
+}
+
+static void enter_passive_mode(uint32_t port_idx) {
+    if (port_idx >= MAX_PORTS) return;
+    
+    if (active_fds[port_idx] >= 0) {
+        close(active_fds[port_idx]);
+        active_fds[port_idx] = -1;
+        
+        // Wait for reader thread to finish
+        pthread_join(active_reader_threads[port_idx], NULL);
+        
+        port_states[port_idx] = ST_PASSIVE;
+        fprintf(stderr, "[state] Port %u: ACTIVE -> PASSIVE (foreign open)\n", port_idx);
+        
+        // Update log to show passive mode
+        if (port_logs[port_idx]) {
+            struct timespec ts; 
+            clock_gettime(CLOCK_REALTIME, &ts);
+            fprintf(port_logs[port_idx],
+                    "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"info\",\"msg\":\"mode_changed\",\"port_idx\":%u,\"mode\":\"passive\"}\n",
+                    (uint64_t)ts.tv_sec, ts.tv_nsec, port_idx);
+            fflush(port_logs[port_idx]);
+        }
+    }
+}
+
+static void handle_port_state_transition(uint32_t port_idx, int event_type, uint32_t tgid) {
+    if (port_idx >= MAX_PORTS) return;
+    
+    // Ignore our own opens/closes
+    if (tgid == self_tgid) return;
+    
+    if (event_type == 1) { // OPEN
+        if (foreign_openers[port_idx] == 0 && port_states[port_idx] == ST_ACTIVE) {
+            enter_passive_mode(port_idx);
+        }
+        foreign_openers[port_idx]++;
+    } else if (event_type == 2) { // CLOSE
+        if (foreign_openers[port_idx] > 0) {
+            foreign_openers[port_idx]--;
+        }
+        if (foreign_openers[port_idx] == 0 && port_states[port_idx] == ST_PASSIVE && !stop_flag) {
+            enter_active_mode(port_idx);
+        }
+    }
 }
 
 static void normalize_path(const char *input_path, char *output_path, size_t output_size)
@@ -278,8 +451,14 @@ static int handle_event(void *ctx, void *data, size_t len)
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
-            // Event type=%d, port_idx=%u, comm=%.16s
+    // Event type=%d, port_idx=%u, comm=%.16s
     log_event_json(e);
+    
+    // Handle port state transitions for active/passive monitoring
+    if (e->type == 1 || e->type == 2) { // OPEN or CLOSE events
+        handle_port_state_transition(e->port_idx, e->type, e->tgid);
+    }
+    
     pthread_mutex_unlock(&ports_mu);
     return 0;
 }
@@ -351,6 +530,11 @@ static int api_add_port(const char *devpath, const char *logpath, char *err, siz
     // Scan existing processes for already-open fds to this device
     scan_existing_fds(devpath, idx);
     
+    // Try to enter active mode initially if port is free
+    pthread_mutex_unlock(&ports_mu);
+    enter_active_mode(idx);
+    pthread_mutex_lock(&ports_mu);
+    
     return (int)idx;
 }
 
@@ -389,6 +573,13 @@ static void reopen_existing_logs(void)
     // Since configuration persistence is disabled, target_count starts at 0
     // No existing logs to reopen, no existing FDs to scan
     // Ports will be added dynamically via API calls
+    
+    // Try to enter active mode for any existing ports
+    for (uint32_t i = 0; i < target_count; i++) {
+        if (ports[i][0] != '\0') {
+            enter_active_mode(i);
+        }
+    }
 }
 
 static void *fd_scanner_thread(void *arg)
@@ -546,6 +737,16 @@ static int api_remove_port(int idx, char *err, size_t errsz)
     if (idx < 0 || idx >= (int)MAX_PORTS) { snprintf(err, errsz, "bad index"); return -1; }
     pthread_mutex_lock(&ports_mu);
     if (ports[idx][0] == '\0' && !port_logs[idx]) { pthread_mutex_unlock(&ports_mu); snprintf(err, errsz, "not found"); return -1; }
+    
+    // Clean up active monitoring for this port
+    if (active_fds[idx] >= 0) {
+        close(active_fds[idx]);
+        active_fds[idx] = -1;
+        pthread_join(active_reader_threads[idx], NULL);
+        port_states[idx] = ST_PASSIVE;
+        foreign_openers[idx] = 0;
+    }
+    
     if (port_logs[idx]) { fclose(port_logs[idx]); port_logs[idx] = NULL; }
     ports[idx][0] = '\0';
     // Recompute target_count as highest non-empty index + 1
@@ -1043,6 +1244,9 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "BPF program loaded and attached successfully\n");
     fprintf(stderr, "Ring buffer created successfully\n");
+    
+    // Initialize our own process ID for active monitoring state management
+    self_tgid = (uint32_t)getpid();
 
     signal(SIGINT, on_sig);
     signal(SIGTERM, on_sig);
@@ -1102,6 +1306,15 @@ int main(int argc, char **argv)
     pthread_kill(scan_thr, SIGINT);
     pthread_join(http_thr, NULL);
     pthread_join(scan_thr, NULL);
+    
+    // Clean up active monitoring for all ports
+    for (uint32_t i = 0; i < MAX_PORTS; i++) {
+        if (active_fds[i] >= 0) {
+            close(active_fds[i]);
+            active_fds[i] = -1;
+            pthread_join(active_reader_threads[i], NULL);
+        }
+    }
 
     ring_buffer__free(g_rb);
     sniffer_bpf__destroy(g_skel);
