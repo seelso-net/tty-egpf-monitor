@@ -1,316 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TTY eBPF Monitor - APT Repository</title>
+    <title>tty-egpf-monitor APT Repository</title>
     <style>
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #059669;
-            --warning-color: #d97706;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --border-color: #e2e8f0;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --code-bg: #f1f5f9;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: var(--text-primary);
-            background-color: var(--bg-color);
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 3rem;
-            padding: 2rem 0;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--primary-color);
-            margin-bottom: 0.5rem;
-        }
-
-        .header .subtitle {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
-
-        .badges {
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            background: var(--primary-color);
-            color: white;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-            text-decoration: none;
-            transition: background-color 0.2s;
-        }
-
-        .badge:hover {
-            background: #1d4ed8;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .card h2 {
-            color: var(--primary-color);
-            margin-bottom: 1rem;
-            font-size: 1.5rem;
-        }
-
-        .card h3 {
-            color: var(--text-primary);
-            margin: 1.5rem 0 0.75rem 0;
-            font-size: 1.2rem;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        code {
-            background: var(--code-bg);
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-        }
-
-        pre {
-            background: var(--code-bg);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            overflow-x: auto;
-            border-left: 4px solid var(--primary-color);
-            margin: 1rem 0;
-        }
-
-        pre code {
-            background: none;
-            padding: 0;
-        }
-
-        .install-steps {
-            counter-reset: step-counter;
-        }
-
-        .install-step {
-            position: relative;
-            padding-left: 3rem;
-            margin-bottom: 1.5rem;
-            counter-increment: step-counter;
-        }
-
-        .install-step::before {
-            content: counter(step-counter);
-            position: absolute;
-            left: 0;
-            top: 0;
-            background: var(--primary-color);
-            color: white;
-            width: 2rem;
-            height: 2rem;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-        }
-
-        .feature-list {
-            list-style: none;
-            padding: 0;
-        }
-
-        .feature-list li {
-            padding: 0.5rem 0;
-            padding-left: 1.5rem;
-            position: relative;
-        }
-
-        .feature-list li::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: var(--success-color);
-            font-weight: bold;
-        }
-
-        .warning {
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-
-        .info {
-            background: #dbeafe;
-            border: 1px solid #3b82f6;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border-color);
-            color: var(--text-secondary);
-        }
-
-        .links {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            margin-top: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .links a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .links a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .links {
-                flex-direction: column;
-                gap: 1rem;
-            }
-        }
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        code { background: #f5f5f5; padding: 2px 4px; border-radius: 3px; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🔍 TTY eBPF Monitor</h1>
-            <p class="subtitle">Advanced Serial Port Monitoring with eBPF Technology</p>
-            <div class="badges">
-                <span class="badge">eBPF CO-RE</span>
-                <span class="badge">Ubuntu 22.04/24.04</span>
-                <span class="badge">Real-time Monitoring</span>
-                <span class="badge">APT Repository</span>
-            </div>
-        </div>
-
-        <div class="grid">
-            <div class="card">
-                <h2>🚀 Quick Installation</h2>
-                <div class="install-steps">
-                    <div class="install-step">
-                        <h3>One-command install (Recommended)</h3>
-                        <pre><code>curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install.sh | bash</code></pre>
-                    </div>
-                    <div class="install-step">
-                        <h3>Manual installation</h3>
-                        <pre><code># Add repository
+        <h1>tty-egpf-monitor APT Repository</h1>
+        
+        <div class="section">
+            <h2>Installation</h2>
+            <p>Add this repository to your system:</p>
+            <pre><code># Add GPG key (modern method)
 CODENAME=$(lsb_release -cs)
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
 curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
+
+# Add repository
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 
-# Install packages
+# Update and install
 sudo apt-get update
 sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
 sudo systemctl enable --now tty-egpf-monitord</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>✨ Key Features</h2>
-                <ul class="feature-list">
-                    <li><strong>eBPF-Powered:</strong> Kernel-level tracing with CO-RE technology</li>
-                    <li><strong>Multi-port:</strong> Monitor multiple serial devices simultaneously</li>
-                    <li><strong>Noise-free:</strong> Advanced filtering eliminates system scanner noise</li>
-                    <li><strong>Real-time:</strong> Live streaming of TTY events and data</li>
-                    <li><strong>Daemon + CLI:</strong> Background daemon with lightweight CLI client</li>
-                    <li><strong>Container-friendly:</strong> Unix socket API for easy containerization</li>
-                    <li><strong>Ubuntu Support:</strong> Works on both 22.04 (Jammy) and 24.04 (Noble)</li>
-                </ul>
-            </div>
+            
+            <p><strong>One-command install:</strong></p>
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install.sh | bash</code></pre>
         </div>
 
-        <div class="card">
-            <h2>📦 Available Packages</h2>
-            <div class="grid">
-                <div>
-                    <h3>Core Packages</h3>
-                    <ul>
-                        <li><strong>tty-egpf-monitord</strong> - eBPF serial monitoring daemon with HTTP API</li>
-                        <li><strong>tty-egpf-monitor-cli</strong> - CLI client for managing the daemon</li>
-                    </ul>
-                </div>
-                <div>
-                    <h3>Ubuntu Version Support</h3>
-                    <ul>
-                        <li><strong>22.04 (jammy):</strong> Automatic libbpf upgrade in postinst</li>
-                        <li><strong>24.04 (noble):</strong> Uses native libbpf 1.7.0+</li>
-                    </ul>
-                </div>
-            </div>
+        <div class="section">
+            <h2>Available Packages</h2>
+            <ul>
+                <li><strong>tty-egpf-monitord</strong> - eBPF serial monitoring daemon with HTTP API</li>
+                <li><strong>tty-egpf-monitor-cli</strong> - CLI client for managing the daemon</li>
+            </ul>
         </div>
 
-        <div class="card">
-            <h2>📋 Usage Examples</h2>
-            <h3>Basic Commands</h3>
+        <div class="section">
+            <h2>Repository Structure</h2>
+            <h3>Ubuntu 22.04 (Jammy)</h3>
+            <ul>
+                <li><a href="dists/jammy/">dists/jammy/</a> - Package metadata</li>
+                <li><a href="pool/jammy/">pool/jammy/</a> - Package files (.deb)</li>
+                <li><a href="dists/jammy/Release">Release</a> | <a href="dists/jammy/Release.gpg">Release.gpg</a> - Signatures</li>
+            </ul>
+            
+            <h3>Ubuntu 24.04 (Noble)</h3>
+            <ul>
+                <li><a href="dists/noble/">dists/noble/</a> - Package metadata</li>
+                <li><a href="pool/noble/">pool/noble/</a> - Package files (.deb)</li>
+                <li><a href="dists/noble/Release">Release</a> | <a href="dists/noble/Release.gpg">Release.gpg</a> - Signatures</li>
+            </ul>
+            
+            <h3>Security</h3>
+            <ul>
+                <li><a href="public-apt-key.asc">public-apt-key.asc</a> - GPG public key (ASCII)</li>
+                <li><a href="public-apt-key.gpg">public-apt-key.gpg</a> - GPG public key (binary)</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Usage Examples</h2>
             <pre><code># Add a port to monitor
 tty-egpf-monitor add /dev/ttyUSB0 115200
 
@@ -318,113 +74,23 @@ tty-egpf-monitor add /dev/ttyUSB0 115200
 tty-egpf-monitor list
 
 # Live stream events (by index or device name)
-tty-egpf-monitor stream 0
 tty-egpf-monitor stream /dev/ttyUSB0
 
-# Download full log (by index or device name)
-tty-egpf-monitor logs 0 > captured.jsonl
+# Download full log
 tty-egpf-monitor logs /dev/ttyUSB0 > captured.jsonl
 
 # Remove monitoring
 tty-egpf-monitor remove /dev/ttyUSB0</code></pre>
-
-            <h3>Sample Log Output</h3>
-            <pre><code>[Thu Sep 04 14:52:46.874] WRITE: picocom APP->DEV "\x0d"
-[Thu Sep 04 14:52:49.023] WRITE: picocom APP->DEV "\x09"
-[Thu Sep 04 14:52:56.078] WRITE: picocom APP->DEV "Hello World\x0a"</code></pre>
         </div>
 
-        <div class="card">
-            <h2>🏗️ APT Repository Structure</h2>
-            <p>This repository serves GPG-signed packages for both Ubuntu versions:</p>
-            <div class="grid">
-                <div>
-                    <h3>Ubuntu 22.04 (Jammy)</h3>
-                    <ul>
-                        <li><a href="dists/jammy/">dists/jammy/</a> - Package metadata and signatures</li>
-                        <li><a href="pool/jammy/">pool/jammy/</a> - Package files (.deb)</li>
-                        <li><a href="dists/jammy/Release">Release</a> | <a href="dists/jammy/Release.gpg">Release.gpg</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h3>Ubuntu 24.04 (Noble)</h3>
-                    <ul>
-                        <li><a href="dists/noble/">dists/noble/</a> - Package metadata and signatures</li>
-                        <li><a href="pool/noble/">pool/noble/</a> - Package files (.deb)</li>
-                        <li><a href="dists/noble/Release">Release</a> | <a href="dists/noble/Release.gpg">Release.gpg</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>🛡️ Security & GPG</h2>
-            <p>All packages and repository metadata are GPG-signed for security:</p>
+        <div class="section">
+            <h2>Documentation</h2>
             <ul>
-                <li><strong>Public Key (ASCII):</strong> <a href="public-apt-key.asc">public-apt-key.asc</a></li>
-                <li><strong>Public Key (Binary):</strong> <a href="public-apt-key.gpg">public-apt-key.gpg</a></li>
-                <li><strong>Repository Signatures:</strong> Each Release file is signed with Release.gpg</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/README.md">README.md</a> - Overview and quick start</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/INSTALLATION.md">INSTALLATION.md</a> - Detailed installation guide</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/UBUNTU_22_04_COMPATIBILITY.md">Ubuntu 22.04 Compatibility</a> - Jammy support details</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor">GitHub Repository</a> - Source code and issues</li>
             </ul>
-        </div>
-
-        <div class="card">
-            <h2>⚡ Quick Verification</h2>
-            <p>After installation, verify everything is working:</p>
-            <pre><code># Check service status
-sudo systemctl status tty-egpf-monitord
-
-# Test CLI connection
-tty-egpf-monitor list
-
-# Add a test port (if available)
-tty-egpf-monitor add /dev/ttyUSB0 115200
-
-# View live stream
-tty-egpf-monitor stream /dev/ttyUSB0</code></pre>
-        </div>
-
-        <div class="card">
-            <h2>📚 Documentation</h2>
-            <div class="grid">
-                <div>
-                    <h3>📖 Main Documentation</h3>
-                    <ul>
-                        <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/README.md">README.md</a> - Overview and quick start</li>
-                        <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/INSTALLATION.md">INSTALLATION.md</a> - Detailed installation guide</li>
-                        <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/UBUNTU_22_04_COMPATIBILITY.md">Ubuntu 22.04 Compatibility</a> - Deep dive on Jammy support</li>
-                    </ul>
-                </div>
-                <div>
-                    <h3>🔧 Technical Details</h3>
-                    <ul>
-                        <li><strong>Architecture:</strong> eBPF CO-RE with libbpf</li>
-                        <li><strong>Tracepoints:</strong> syscalls (open/close/read/write/ioctl)</li>
-                        <li><strong>API:</strong> HTTP over Unix Domain Socket</li>
-                        <li><strong>Logging:</strong> NDJSON with escaped data</li>
-                        <li><strong>Filtering:</strong> Attribute-based noise reduction</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <div class="warning">
-            <h3>⚠️ Requirements</h3>
-            <p><strong>Root privileges required</strong> for eBPF operations. The daemon runs as root, but the CLI can be used by regular users (with proper socket permissions).</p>
-        </div>
-
-        <div class="footer">
-            <p>TTY eBPF Monitor - Advanced Serial Port Monitoring</p>
-            <div class="links">
-                <a href="https://github.com/seelso-net/tty-egpf-monitor">GitHub Repository</a>
-                <a href="https://github.com/seelso-net/tty-egpf-monitor/issues">Issues & Support</a>
-                <a href="https://github.com/seelso-net/tty-egpf-monitor/releases">Releases</a>
-                <a href="public-apt-key.asc">GPG Key</a>
-                <a href="dists/">APT Metadata</a>
-                <a href="pool/">Package Pool</a>
-            </div>
-            <p style="margin-top: 1rem; font-size: 0.875rem;">
-                Licensed under GPL-3.0 | Built with ❤️ and eBPF
-            </p>
         </div>
     </div>
 </body>
