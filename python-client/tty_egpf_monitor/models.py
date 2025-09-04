@@ -94,20 +94,20 @@ class LogEntry:
         from datetime import datetime
         
         # Parse date: dd.mm.yy
-        day, month, year = date_str.split('.')
-        year = int('20' + year)  # Convert yy to 20yy
+        day_str, month_str, year_str = date_str.split('.')
+        year_int = int('20' + year_str)  # Convert yy to 20yy
         
         # Parse time: HH:MM:SS.mmm
         time_part, ms_part = time_str.split('.')
-        hour, minute, second = time_part.split(':')
+        hour_str, minute_str, second_str = time_part.split(':')
         
         return datetime(
-            year=year,
-            month=int(month),
-            day=int(day),
-            hour=int(hour),
-            minute=int(minute),
-            second=int(second),
+            year=year_int,
+            month=int(month_str),
+            day=int(day_str),
+            hour=int(hour_str),
+            minute=int(minute_str),
+            second=int(second_str),
             microsecond=int(ms_part) * 1000  # Convert ms to microseconds
         )
     

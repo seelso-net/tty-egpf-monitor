@@ -12,7 +12,7 @@ from typing import Optional
 from .client import TTYMonitorClient, TTYMonitorError
 
 
-def cmd_add(client: TTYMonitorClient, args) -> int:
+def cmd_add(client: TTYMonitorClient, args: argparse.Namespace) -> int:
     """Add a port to monitor."""
     try:
         idx = client.add_port(args.device, args.baudrate, args.logfile)
@@ -23,7 +23,7 @@ def cmd_add(client: TTYMonitorClient, args) -> int:
         return 1
 
 
-def cmd_list(client: TTYMonitorClient, args) -> int:
+def cmd_list(client: TTYMonitorClient, args: argparse.Namespace) -> int:
     """List configured ports."""
     try:
         ports = client.list_ports()
@@ -35,7 +35,7 @@ def cmd_list(client: TTYMonitorClient, args) -> int:
         return 1
 
 
-def cmd_logs(client: TTYMonitorClient, args) -> int:
+def cmd_logs(client: TTYMonitorClient, args: argparse.Namespace) -> int:
     """Download full log for a port."""
     try:
         # Parse port identifier (int or string)
@@ -53,7 +53,7 @@ def cmd_logs(client: TTYMonitorClient, args) -> int:
         return 1
 
 
-def cmd_stream(client: TTYMonitorClient, args) -> int:
+def cmd_stream(client: TTYMonitorClient, args: argparse.Namespace) -> int:
     """Live stream logs for a port."""
     try:
         # Parse port identifier (int or string)
@@ -75,7 +75,7 @@ def cmd_stream(client: TTYMonitorClient, args) -> int:
         return 1
 
 
-def cmd_remove(client: TTYMonitorClient, args) -> int:
+def cmd_remove(client: TTYMonitorClient, args: argparse.Namespace) -> int:
     """Remove a port from monitoring."""
     try:
         # Parse port identifier (int or string)
@@ -97,7 +97,7 @@ def cmd_remove(client: TTYMonitorClient, args) -> int:
         return 1
 
 
-def main():
+def main() -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         description="TTY eBPF Monitor Python CLI",

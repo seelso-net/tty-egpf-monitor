@@ -121,7 +121,10 @@ class TTYMonitorClient:
         body = self._send_http_request("POST", "/ports", json.dumps(request_data))
         try:
             response = json.loads(body)
-            return response["idx"]
+            idx = response["idx"]
+            if not isinstance(idx, int):
+                raise TTYMonitorError(f"Invalid idx type: {type(idx)}")
+            return idx
         except (json.JSONDecodeError, KeyError) as e:
             raise TTYMonitorError(f"Invalid response: {e}")
     
@@ -145,7 +148,8 @@ class TTYMonitorClient:
         
         try:
             response = json.loads(body)
-            return response.get("ok", False)
+            ok_value = response.get("ok", False)
+            return bool(ok_value)
         except json.JSONDecodeError:
             return False
     
