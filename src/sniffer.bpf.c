@@ -349,6 +349,9 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
         struct fdkey k; k.tgid = tgid; k.fd = rc->fd;
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        /* Only emit READ if we've already emitted OPEN (from write/ioctl) */
+        __u8 *emitted = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (!emitted) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         /* Clamp ret to unsigned bounded size for copy */
         __u64 uret = ( __u64)ret;
@@ -370,6 +373,9 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
         struct fdkey k; k.tgid = tgid; k.fd = rc->fd;
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
+        /* Only emit READ if we've already emitted OPEN (from write/ioctl) */
+        __u8 *emitted = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (!emitted) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         if (ret <= 0) { bpf_map_delete_elem(&rd_ctx, &tgid); return 0; }
         __u64 uret2 = ( __u64)ret;
         __u32 cap = uret2 > MAX_DATA ? MAX_DATA : ( __u32)uret2;
