@@ -204,6 +204,7 @@
             justify-content: center;
             gap: 2rem;
             margin-top: 1rem;
+            flex-wrap: wrap;
         }
 
         .links a {
@@ -254,7 +255,7 @@
                 <h2>🚀 Quick Installation</h2>
                 <div class="install-steps">
                     <div class="install-step">
-                        <h3>One-command install</h3>
+                        <h3>One-command install (Recommended)</h3>
                         <pre><code>curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install.sh | bash</code></pre>
                     </div>
                     <div class="install-step">
@@ -288,6 +289,26 @@ sudo systemctl enable --now tty-egpf-monitord</code></pre>
         </div>
 
         <div class="card">
+            <h2>📦 Available Packages</h2>
+            <div class="grid">
+                <div>
+                    <h3>Core Packages</h3>
+                    <ul>
+                        <li><strong>tty-egpf-monitord</strong> - eBPF serial monitoring daemon with HTTP API</li>
+                        <li><strong>tty-egpf-monitor-cli</strong> - CLI client for managing the daemon</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>Ubuntu Version Support</h3>
+                    <ul>
+                        <li><strong>22.04 (jammy):</strong> Automatic libbpf upgrade in postinst</li>
+                        <li><strong>24.04 (noble):</strong> Uses native libbpf 1.7.0+</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>📋 Usage Examples</h2>
             <h3>Basic Commands</h3>
             <pre><code># Add a port to monitor
@@ -313,47 +334,53 @@ tty-egpf-monitor remove /dev/ttyUSB0</code></pre>
 [Thu Sep 04 14:52:56.078] WRITE: picocom APP->DEV "Hello World\x0a"</code></pre>
         </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>🔧 Ubuntu 22.04 (Jammy)</h2>
-                <div class="info">
-                    <p><strong>Automatic Compatibility:</strong> The APT package automatically builds and installs a newer libbpf during installation if needed. No manual steps required.</p>
-                </div>
-                <p>The post-install script detects Jammy and ensures a compatible libbpf version is available.</p>
-            </div>
-
-            <div class="card">
-                <h2>🛡️ Security & GPG</h2>
-                <p>All packages are GPG-signed for security:</p>
-                <ul>
-                    <li><strong>Public Key:</strong> <a href="public-apt-key.asc">public-apt-key.asc</a></li>
-                    <li><strong>Binary Format:</strong> <a href="public-apt-key.gpg">public-apt-key.gpg</a> (for manual keyring setup)</li>
-                </ul>
-                <p>The repository supports both Ubuntu 22.04 (jammy) and 24.04 (noble) with separate package pools.</p>
-            </div>
-        </div>
-
         <div class="card">
-            <h2>🏗️ Repository Structure</h2>
-            <p>This APT repository serves packages for both Ubuntu versions:</p>
+            <h2>🏗️ APT Repository Structure</h2>
+            <p>This repository serves GPG-signed packages for both Ubuntu versions:</p>
             <div class="grid">
                 <div>
                     <h3>Ubuntu 22.04 (Jammy)</h3>
                     <ul>
-                        <li><a href="dists/jammy/">dists/jammy/</a> - Package metadata</li>
-                        <li><a href="pool/jammy/">pool/jammy/</a> - Package files</li>
-                        <li>Includes automatic libbpf upgrade in postinst</li>
+                        <li><a href="dists/jammy/">dists/jammy/</a> - Package metadata and signatures</li>
+                        <li><a href="pool/jammy/">pool/jammy/</a> - Package files (.deb)</li>
+                        <li><a href="dists/jammy/Release">Release</a> | <a href="dists/jammy/Release.gpg">Release.gpg</a></li>
                     </ul>
                 </div>
                 <div>
                     <h3>Ubuntu 24.04 (Noble)</h3>
                     <ul>
-                        <li><a href="dists/noble/">dists/noble/</a> - Package metadata</li>
-                        <li><a href="pool/noble/">pool/noble/</a> - Package files</li>
-                        <li>Uses native libbpf 1.7.0+</li>
+                        <li><a href="dists/noble/">dists/noble/</a> - Package metadata and signatures</li>
+                        <li><a href="pool/noble/">pool/noble/</a> - Package files (.deb)</li>
+                        <li><a href="dists/noble/Release">Release</a> | <a href="dists/noble/Release.gpg">Release.gpg</a></li>
                     </ul>
                 </div>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>🛡️ Security & GPG</h2>
+            <p>All packages and repository metadata are GPG-signed for security:</p>
+            <ul>
+                <li><strong>Public Key (ASCII):</strong> <a href="public-apt-key.asc">public-apt-key.asc</a></li>
+                <li><strong>Public Key (Binary):</strong> <a href="public-apt-key.gpg">public-apt-key.gpg</a></li>
+                <li><strong>Repository Signatures:</strong> Each Release file is signed with Release.gpg</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>⚡ Quick Verification</h2>
+            <p>After installation, verify everything is working:</p>
+            <pre><code># Check service status
+sudo systemctl status tty-egpf-monitord
+
+# Test CLI connection
+tty-egpf-monitor list
+
+# Add a test port (if available)
+tty-egpf-monitor add /dev/ttyUSB0 115200
+
+# View live stream
+tty-egpf-monitor stream /dev/ttyUSB0</code></pre>
         </div>
 
         <div class="card">
@@ -378,22 +405,6 @@ tty-egpf-monitor remove /dev/ttyUSB0</code></pre>
                     </ul>
                 </div>
             </div>
-        </div>
-
-        <div class="card">
-            <h2>⚡ Quick Verification</h2>
-            <p>After installation, verify everything is working:</p>
-            <pre><code># Check service status
-sudo systemctl status tty-egpf-monitord
-
-# Test CLI connection
-tty-egpf-monitor list
-
-# Add a test port (if available)
-tty-egpf-monitor add /dev/ttyUSB0 115200
-
-# View live stream
-tty-egpf-monitor stream /dev/ttyUSB0</code></pre>
         </div>
 
         <div class="warning">
