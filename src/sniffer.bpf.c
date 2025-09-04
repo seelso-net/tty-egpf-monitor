@@ -297,13 +297,7 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct fdkey k = { .tgid = tgid, .fd = fd };
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) return 0;
-        /* Emit OPEN once on first usage (ioctl) */
-        __u8 *em3 = bpf_map_lookup_elem(&fd_open_emitted, &k);
-        if (!em3) {
-            __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
-            struct event *o3 = bpf_ringbuf_reserve(&events, sizeof(*o3), 0);
-            if (o3) { fill_common(o3, EV_OPEN); o3->cmd=0; o3->ret=0; o3->dir=0; o3->port_idx=*idxp; o3->data_len=0; o3->data_trunc=0; bpf_ringbuf_submit(o3, 0); }
-        }
+        /* Do NOT emit OPEN on ioctl; ioctl-only scans shouldn't flip modes */
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (!e) return 0;
         fill_common(e, EV_IOCTL);
@@ -590,7 +584,7 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
-    /* Emit OPEN once on first usage */
+    /* Emit OPEN once on first write only */
     __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
     if (!em) {
         __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
