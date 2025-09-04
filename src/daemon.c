@@ -62,6 +62,38 @@ struct close_ctx { int32_t fd; };
 #define DEFAULT_STOPBITS 1
 #define DEFAULT_HWFLOW false
 
+// Function to escape and quote data for safe logging
+static void escape_data_for_log(const uint8_t *data, size_t len, char *output, size_t output_size) {
+    size_t j = 0;
+    output[j++] = '"';
+    
+    for (size_t i = 0; i < len && j < output_size - 2; i++) {
+        uint8_t c = data[i];
+        if (c >= 32 && c <= 126) {
+            // Printable ASCII character
+            if (c == '"' || c == '\\') {
+                if (j < output_size - 3) {
+                    output[j++] = '\\';
+                    output[j++] = c;
+                }
+            } else {
+                output[j++] = c;
+            }
+        } else {
+            // Non-printable character - escape as hex
+            if (j < output_size - 5) {
+                snprintf(output + j, output_size - j, "\\x%02x", c);
+                j += 4;
+            }
+        }
+    }
+    
+    if (j < output_size - 1) {
+        output[j++] = '"';
+    }
+    output[j] = '\0';
+}
+
 struct event {
     uint64_t ts, dev;
     uint32_t pid, tgid;
@@ -192,15 +224,11 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
         char time_str[32];
         strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
         fprintf(port_logs[port_idx], "[%s.%03ld] %s: ", time_str, ts.tv_nsec / 1000000, direction);
-        for (size_t i = 0; i < len && i < 32; i++) {  // Limit to 32 chars for readability
-            if (data[i] >= 32 && data[i] <= 126) {
-                fprintf(port_logs[port_idx], "%c", data[i]);
-            } else {
-                fprintf(port_logs[port_idx], "\\x%02x", (unsigned char)data[i]);
-            }
-        }
-        if (len > 32) fprintf(port_logs[port_idx], "...");
-        fprintf(port_logs[port_idx], "\n");
+        
+        // Use proper escaping and quoting for data
+        char escaped_data[512];
+        escape_data_for_log((const uint8_t*)data, len, escaped_data, sizeof(escaped_data));
+        fprintf(port_logs[port_idx], "%s\n", escaped_data);
     }
     fflush(port_logs[port_idx]);
 }
@@ -665,16 +693,10 @@ static void log_event_json(const struct event *e)
             strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
             fprintf(f, "[%s.%03ld] %s: %s %s ", time_str, ts.tv_nsec / 1000000, etype, e->comm, dir);
             
-            // Show data in readable format
-            for (unsigned i = 0; i < e->data_len && i < 32; i++) {
-                if (e->data[i] >= 32 && e->data[i] <= 126) {
-                    fprintf(f, "%c", e->data[i]);
-                } else {
-                    fprintf(f, "\\x%02x", (unsigned char)e->data[i]);
-                }
-            }
-            if (e->data_len > 32) fprintf(f, "...");
-            fprintf(f, "\n");
+            // Show data with proper escaping and quoting
+            char escaped_data[512];
+            escape_data_for_log(e->data, e->data_len, escaped_data, sizeof(escaped_data));
+            fprintf(f, "%s\n", escaped_data);
         } else if (e->type == 5) { // IOCTL
             // Only log important IOCTLs to reduce spam
             if (is_important_ioctl(e->cmd)) {
@@ -699,13 +721,12 @@ static void log_event_json(const struct event *e)
                 fprintf(stderr, "ERROR: Invalid data_len=%u > MAX_DATA=%d\n", e->data_len, MAX_DATA);
                 fprintf(f, ",\"error\":\"data_len_invalid\"");
             } else {
-                fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":\"",
+                fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":",
                         e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
-                // Safe data output with bounds checking
-                for (unsigned i = 0; i < e->data_len && i < MAX_DATA; i++) {
-                    fprintf(f, "%02x", e->data[i]);
-                }
-                fprintf(f, "\"");
+                // Safe data output with proper escaping and quoting
+                char escaped_data[512];
+                escape_data_for_log(e->data, e->data_len, escaped_data, sizeof(escaped_data));
+                fprintf(f, "%s", escaped_data);
             }
         } else if (e->type == 5) {
             fprintf(f, ",\"cmd\":%u", e->cmd);
@@ -789,6 +810,16 @@ static int sync_targets_map(void)
 static int api_add_port(const char *devpath, const char *logpath, int baudrate, char *err, size_t errsz)
 {
     pthread_mutex_lock(&ports_mu);
+    
+    // Check if port already exists
+    for (uint32_t i = 0; i < target_count; i++) {
+        if (ports[i][0] != '\0' && strcmp(ports[i], devpath) == 0) {
+            snprintf(err, errsz, "port %s already exists", devpath);
+            pthread_mutex_unlock(&ports_mu);
+            return -1;
+        }
+    }
+    
     uint32_t idx = target_count;
     if (idx >= MAX_PORTS) { snprintf(err, errsz, "max ports reached"); pthread_mutex_unlock(&ports_mu); return -1; }
     normalize_path(devpath, ports[idx], sizeof(ports[idx]));
@@ -1064,8 +1095,25 @@ static int api_find_index_by_path_nolock(const char *dev)
 
 static void http_send(int cfd, int code, const char *ctype, const char *body)
 {
-    dprintf(cfd, "HTTP/1.1 %d\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s",
-            code, ctype, body?strlen(body):0, body?body:"");
+    char header[512];
+    snprintf(header, sizeof(header), "HTTP/1.1 %d\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+             code, ctype, body ? strlen(body) : 0);
+    
+    fprintf(stderr, "DEBUG: http_send code=%d, ctype='%s', body='%s', body_len=%zu\n", 
+            code, ctype, body ? body : "(null)", body ? strlen(body) : 0);
+    
+    // Write headers
+    if (write(cfd, header, strlen(header)) < 0) {
+        fprintf(stderr, "Warning: failed to write headers: %s\n", strerror(errno));
+        return;
+    }
+    
+    // Write body if present
+    if (body && strlen(body) > 0) {
+        if (write(cfd, body, strlen(body)) < 0) {
+            fprintf(stderr, "Warning: failed to write body: %s\n", strerror(errno));
+        }
+    }
 }
 
 static void handle_http_client(int cfd)
@@ -1086,10 +1134,13 @@ static void handle_http_client(int cfd)
         pthread_mutex_lock(&ports_mu);
         char body[4096];
         size_t off = 0; off += snprintf(body+off, sizeof(body)-off, "[");
+        fprintf(stderr, "DEBUG: GET /ports: target_count=%u\n", target_count);
         for (uint32_t i=0;i<target_count;i++) {
+            fprintf(stderr, "DEBUG: port[%u]='%s'\n", i, ports[i]);
             off += snprintf(body+off, sizeof(body)-off, "%s{\"idx\":%u,\"dev\":\"%s\"}", i?",":"", i, ports[i]);
         }
         off += snprintf(body+off, sizeof(body)-off, "]");
+        fprintf(stderr, "DEBUG: GET /ports response body='%s', off=%zu\n", body, off);
         pthread_mutex_unlock(&ports_mu);
         http_send(cfd, 200, "application/json", body);
     } else if (!strncmp(buf, "GET /logs/", 10)) {
