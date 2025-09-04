@@ -45,6 +45,17 @@ typedef long long          __s64;
 #define __NR_writev 20
 #endif
 
+/* Minimal O_* flags used to detect writable opens */
+#ifndef O_RDONLY
+#define O_RDONLY 0
+#endif
+#ifndef O_WRONLY
+#define O_WRONLY 1
+#endif
+#ifndef O_RDWR
+#define O_RDWR 2
+#endif
+
 char LICENSE[] SEC("license") = "GPL";
 
 #define MAX_DATA 256
@@ -127,6 +138,9 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u3
 
 /* Track whether we've emitted OPEN event for a (tgid,fd) */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_open_emitted SEC(".maps");
+
+/* Track if the pending open is writable (per-tgid) */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u8); __uint(max_entries, 32768); } pending_open_writable SEC(".maps");
 
 /* Debug counters for open mapping */
 struct dbg_open_vals {
@@ -218,6 +232,16 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
             if (dv_enter) { dv_enter->enter_matches += 1; dv_enter->last_tgid = tgid; dv_enter->last_idx = midx; }
         }
         else if (dv_enter) { dv_enter->no_match += 1; }
+        /* Also capture flags to determine writability */
+        if (id == __NR_openat) {
+            int flags = 0; bpf_probe_read_kernel(&flags, sizeof(flags), &ctx->args[2]);
+            __u8 wr = ((flags & O_WRONLY) || (flags & O_RDWR)) ? 1 : 0;
+            bpf_map_update_elem(&pending_open_writable, &tgid, &wr, BPF_ANY);
+        } else {
+            /* openat2: struct open_how* at arg2 -> read .flags
+               For simplicity on older kernels, assume read-only if we cannot parse */
+            __u8 wr0 = 0; bpf_map_update_elem(&pending_open_writable, &tgid, &wr0, BPF_ANY);
+        }
         return 0;
     }
 
@@ -471,8 +495,14 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-            bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-            bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    /* Only mark as OPEN-emittable if the open was writable */
+    __u8 *wr = bpf_map_lookup_elem(&pending_open_writable, &tgid);
+    if (wr && *wr) {
+        bpf_map_update_elem(&fd_open_emitted, &k, wr, BPF_NOEXIST); /* set marker so read won't flip modes; write will still emit OPEN */
+    }
+    bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
@@ -493,6 +523,11 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+    __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
+    if (wr2 && *wr2) {
+        bpf_map_update_elem(&fd_open_emitted, &k, wr2, BPF_NOEXIST);
+    }
+    bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
 }
