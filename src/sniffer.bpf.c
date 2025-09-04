@@ -145,6 +145,9 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(valu
 /* Track if the pending open is writable (per-tgid) */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u8); __uint(max_entries, 32768); } pending_open_writable SEC(".maps");
 
+/* Track whether a TTY ioctl was seen on the fd (e.g., TCGETS) */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_has_tty_ioctl SEC(".maps");
+
 /* Debug counters for open mapping */
 struct dbg_open_vals {
     __u64 enter_seen_raw;
@@ -256,6 +259,11 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct fdkey k = { .tgid = tgid, .fd = fd };
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp) return 0;
+        /* Harden: only emit WRITE if fd was opened writable and OPEN was emitted */
+        __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
+        if (!was_wr) return 0;
+        __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (!em) return 0;
         size_t cap = count > MAX_DATA ? MAX_DATA : count;
         struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
         if (!e) return 0;
@@ -275,6 +283,11 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         struct fdkey k = { .tgid = tgid, .fd = fd };
         __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
         if (!idxp || !iov || vcnt == 0) return 0;
+        /* Harden: only emit WRITE if fd was opened writable and OPEN was emitted */
+        __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
+        if (!was_wr) return 0;
+        __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
+        if (!em) return 0;
         struct __iovec first = {};
         bpf_probe_read_user(&first, sizeof(first), iov);
         size_t cap = first.iov_len > MAX_DATA ? MAX_DATA : first.iov_len;
