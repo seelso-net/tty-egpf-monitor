@@ -437,6 +437,25 @@ Description: CLI for tty-egpf-monitord HTTP API
 
 Package: tty-egpf-monitor-cli
 Architecture: amd64
+Version: 0.5.22-1
+Priority: optional
+Section: utils
+Source: tty-egpf-monitor
+Maintainer: Adrian <adrian@example.com>
+Installed-Size: 23
+Depends: libc6 (>= 2.34)
+Filename: pool/jammy/tty-egpf-monitor-cli_0.5.22-1_amd64~jammy.deb
+Size: 5948
+MD5sum: 63241de6051dd32e99db56c77e038c59
+SHA1: 25dfdf4df2d9275538f766ae9fae2cdd0ad96fec
+SHA256: 3923fe527843c9d5b835794df57af9d959f92f0b448cf4a233b9dab695c2b31d
+SHA512: 0827f638dfbf365e5f44681c9bf766a37b2d8d440aaeeca8582deb8192a8c734b85890f569ce72565d74f1256b94779d2f63fa8001e7636dee31c545ff8cae59
+Description: CLI for tty-egpf-monitord HTTP API
+ Lightweight command line client to manage the local daemon and list/add
+ monitored ports, suitable for container environments.
+
+Package: tty-egpf-monitor-cli
+Architecture: amd64
 Version: 0.5.3-1
 Priority: optional
 Section: utils
@@ -1243,6 +1262,36 @@ MD5sum: e78e8c0bed9c2f566b64e59cf870c22e
 SHA1: ce0966ce3b4db21ae49d154791b6aa406d03b4c2
 SHA256: ae84ebdd5220a542896d56b4e73a30054180ccc7cde637aed5b7a51d386a64fe
 SHA512: 88580d73ed20120cc6939a06dc259e0d6b3b98cc342a3518b718a2d341e96a1859b9a76d2b2bdb0d6141770ab8f0d9967328075a90db55337ffd1f7a6a4a0754
+Description: eBPF serial monitoring daemon with HTTP API
+ A sophisticated real-time serial port monitoring tool that combines
+ the power of eBPF (extended Berkeley Packet Filter) with intelligent
+ state management to provide comprehensive visibility into TTY device
+ activity. Perfect for debugging, reverse engineering, and monitoring
+ serial communications.
+ .
+ Features:
+  * Dual-mode operation (active/passive monitoring)
+  * Real-time data capture and analysis
+  * eBPF-based packet filtering
+  * Comprehensive logging and reporting
+  * Support for various serial protocols
+  * Listens on Unix socket /run/tty-egpf-monitord.sock
+
+Package: tty-egpf-monitord
+Architecture: amd64
+Version: 0.5.22-1
+Priority: optional
+Section: utils
+Source: tty-egpf-monitor
+Maintainer: Adrian <adrian@example.com>
+Installed-Size: 1522
+Depends: libc6 (>= 2.34), libelf1 (>= 0.144), zlib1g (>= 1:1.2.3.3), adduser, libcap2-bin, libsystemd0
+Filename: pool/jammy/tty-egpf-monitord_0.5.22-1_amd64~jammy.deb
+Size: 292620
+MD5sum: b7ad69c88ec18750f0d20ec7f9dd6088
+SHA1: 9b8c1d3802d61e13d2ed328f18d3e1d404cf7e1d
+SHA256: f37b7803dbe81b4269139ae9daab9b3f54411f61544eb32da84c734d2858be0e
+SHA512: 31d45928a6674a8638a65fb6c3b2ed2d66fa0086f7ebb9efdba7cfe1eca7bce24186478467f23662d599303e72d678c250e91b4fd423396b856ebd9d65f2bf35
 Description: eBPF serial monitoring daemon with HTTP API
  A sophisticated real-time serial port monitoring tool that combines
  the power of eBPF (extended Berkeley Packet Filter) with intelligent
