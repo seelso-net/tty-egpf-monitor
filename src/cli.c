@@ -38,6 +38,7 @@ static int http_post_add_port(const char *sock, const char *dev, const char *log
     char buf[4096]; ssize_t n;
     while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
     close(s);
+    printf("\n");  // Add newline after HTTP response
     return 0;
 }
 
@@ -49,6 +50,7 @@ static int http_get_ports(const char *sock)
     char buf[4096]; ssize_t n;
     while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
     close(s);
+    printf("\n");  // Add newline after HTTP response
     return 0;
 }
 
@@ -139,6 +141,7 @@ static int http_get_logs(const char *sock, int idx)
     char buf[4096]; ssize_t n;
     while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
     close(s);
+    printf("\n");  // Add newline after HTTP response
     return 0;
 }
 
@@ -161,6 +164,7 @@ static int http_delete_port(const char *sock, int idx)
     char buf[4096]; ssize_t n;
     while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
     close(s);
+    printf("\n");  // Add newline after HTTP response
     return 0;
 }
 
@@ -253,6 +257,7 @@ int main(int argc, char **argv)
             char buf[4096]; ssize_t n;
             while ((n = read(s, buf, sizeof(buf)-1)) > 0) { buf[n] = 0; fwrite(buf,1,n,stdout); }
             close(s);
+            printf("\n");  // Add newline after HTTP response
             return 0;
         }
     } else {

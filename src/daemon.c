@@ -175,9 +175,12 @@ static void write_info_line(uint32_t idx)
     struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
     
     if (g_log_mode == LOG_MODE_SIMPLE) {
-        // Simple, human-readable format
-        fprintf(port_logs[idx], "[%s] Monitoring started: %s (baud: %d)\n", 
-                ctime(&ts.tv_sec), ports[idx], port_baudrates[idx]);
+        // Simple, human-readable format with new date format
+        struct tm *tm_info = localtime(&ts.tv_sec);
+        char time_str[32];
+        strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
+        fprintf(port_logs[idx], "[%s.%03ld] Monitoring started: %s (baud: %d)\n", 
+                time_str, ts.tv_nsec / 1000000, ports[idx], port_baudrates[idx]);
     } else {
         // Advanced, machine-readable format
         int baud = -1;
