@@ -1485,6 +1485,7 @@ int main(int argc, char **argv)
     }
     
     // Add diagnostic information
+    fprintf(stderr, "=== Runtime Environment Debug ===\n");
     fprintf(stderr, "Kernel version: ");
     FILE *kver = fopen("/proc/version", "r");
     if (kver) {
@@ -1501,6 +1502,29 @@ int main(int argc, char **argv)
     } else {
         fprintf(stderr, "BTF not available: %s\n", strerror(errno));
     }
+    
+    // Check BPF filesystem
+    if (access("/sys/fs/bpf", F_OK) == 0) {
+        fprintf(stderr, "BPF filesystem available: /sys/fs/bpf\n");
+    } else {
+        fprintf(stderr, "BPF filesystem not available: %s\n", strerror(errno));
+    }
+    
+    // Check tracepoints availability
+    if (access("/sys/kernel/debug/tracing/events/syscalls", R_OK) == 0) {
+        fprintf(stderr, "Syscall tracepoints available\n");
+    } else {
+        fprintf(stderr, "Syscall tracepoints not available: %s\n", strerror(errno));
+    }
+    
+    // Check if running as root (needed for BPF)
+    if (geteuid() == 0) {
+        fprintf(stderr, "Running as root: OK\n");
+    } else {
+        fprintf(stderr, "WARNING: Not running as root (uid=%d) - BPF programs may fail\n", geteuid());
+    }
+    
+    fprintf(stderr, "=== End Runtime Debug ===\n");
     
     fprintf(stderr, "About to open BPF skeleton...\n");
     
