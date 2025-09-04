@@ -9,16 +9,32 @@
         ul { line-height: 1.8; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        .info { background: #f0f9ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>APT Repository - Distributions</h1>
-        <p>Available Ubuntu distributions:</p>
+        <div class="info">
+            <p>This APT repository supports both Ubuntu LTS versions with automatic compatibility handling.</p>
+        </div>
+        
+        <h2>Available Ubuntu Distributions:</h2>
         <ul>
-            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS (Jammy Jellyfish)</li>
-            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS (Noble Numbat)</li>
+            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS (Jammy Jellyfish)
+                <ul>
+                    <li>Automatic libbpf upgrade in postinst if needed</li>
+                    <li>Compatible with both kernel 5.15.x and 6.8.x</li>
+                </ul>
+            </li>
+            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS (Noble Numbat)
+                <ul>
+                    <li>Uses native libbpf 1.7.0+</li>
+                    <li>No special handling required</li>
+                </ul>
+            </li>
         </ul>
+        
         <p><a href="../">← Back to main repository</a></p>
     </div>
 </body>
