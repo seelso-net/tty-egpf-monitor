@@ -139,6 +139,9 @@ struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u3
 /* Track whether we've emitted OPEN event for a (tgid,fd) */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_open_emitted SEC(".maps");
 
+/* Track whether a given (tgid,fd) was opened writable */
+struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, struct fdkey); __type(value, __u8); __uint(max_entries, 65536); } fd_is_writable SEC(".maps");
+
 /* Track if the pending open is writable (per-tgid) */
 struct { __uint(type, BPF_MAP_TYPE_HASH); __type(key, __u32); __type(value, __u8); __uint(max_entries, 32768); } pending_open_writable SEC(".maps");
 
@@ -497,10 +500,10 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    /* Only mark as OPEN-emittable if the open was writable */
+    /* Record writability per fd for later gating */
     __u8 *wr = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr && *wr) {
-        bpf_map_update_elem(&fd_open_emitted, &k, wr, BPF_NOEXIST); /* set marker so read won't flip modes; write will still emit OPEN */
+        __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
     }
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
@@ -525,7 +528,7 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
     __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr2 && *wr2) {
-        bpf_map_update_elem(&fd_open_emitted, &k, wr2, BPF_NOEXIST);
+        __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
     }
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
@@ -619,7 +622,9 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
 
-    /* Emit OPEN once on first write only */
+    /* Emit OPEN once on first write only; ensure fd was opened writable */
+    __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
+    if (!was_wr) return 0;
     __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
     if (!em) {
         __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
