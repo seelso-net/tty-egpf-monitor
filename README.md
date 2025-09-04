@@ -98,6 +98,8 @@ For containerized environments, see the [Docker section in INSTALLATION.md](INST
 - On Ubuntu 24.04 (Noble), the native libbpf is sufficient and no action is taken.
 - This happens transparently during `apt install tty-egpf-monitord`—no manual steps are required.
 
+See also: [UBUNTU_22_04_COMPATIBILITY.md](UBUNTU_22_04_COMPATIBILITY.md) for deep-dive details (libbpf versions, linking, CI, and postinst flow).
+
 **Defaults**:
 - Socket: `/run/tty-egpf-monitord.sock`
 - Logs dir: `/var/log/tty-egpf-monitor`

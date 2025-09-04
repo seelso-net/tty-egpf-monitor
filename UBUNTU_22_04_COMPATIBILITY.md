@@ -14,7 +14,7 @@ Ubuntu 22.04 ships with **libbpf 0.5.0**, which has different BPF skeleton attac
 
 ## Solution Architecture
 
-### 1. CI/CD Pipeline Updates
+### 1. CI/CD Pipeline Updates (context)
 
 **File: `.github/workflows/release.yml`**
 
@@ -45,7 +45,7 @@ ldconfig
 - **Ubuntu 24.04**: Continues to use native `libbpf1`
 - **Separate Control Files**: Ensures proper dependencies for each Ubuntu version
 
-### 3. Automatic Runtime Installation
+### 3. Automatic Runtime Installation (postinst)
 
 **File: `debian/tty-egpf-monitord.postinst`**
 
@@ -84,7 +84,7 @@ if [ -f /etc/os-release ] && grep -q "jammy" /etc/os-release; then
 fi
 ```
 
-### 4. Build System Updates
+### 4. Build System Updates (linking)
 
 **File: `Makefile`**
 
@@ -123,7 +123,7 @@ The key difference between libbpf versions:
 - **libbpf 0.5.0**: BPF skeleton attachment may fail silently
 - **libbpf 1.7.0+**: Proper skeleton attachment with error reporting
 
-### Installation Flow
+### Installation Flow on Jammy
 
 1. **Package Installation**: Standard `apt install` process
 2. **Post-installation Script**: Detects Ubuntu 22.04 and upgrades libbpf if needed

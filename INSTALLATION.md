@@ -26,6 +26,8 @@ sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
 sudo systemctl enable --now tty-egpf-monitord
 ```
 
+More details: see [UBUNTU_22_04_COMPATIBILITY.md](UBUNTU_22_04_COMPATIBILITY.md) for the Jammy postinst flow and linking considerations.
+
 4. **Verify installation**:
 ```bash
 # Check service status
