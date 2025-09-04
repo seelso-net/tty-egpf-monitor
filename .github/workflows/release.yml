@@ -857,11 +857,16 @@ jobs:
         # Generate package index files for directory browsing
         echo "Generating package index files..."
         
-        # Create directory index files
-        mkdir -p dists pool
-        
-        # Generate dists/index.html
-        cat > dists/index.html << 'EOF'
+        # Create a script to generate index files (avoids YAML heredoc issues)
+        cat > /tmp/generate_index.sh << 'SCRIPT_EOF'
+#!/bin/bash
+set -e
+
+# Create directory index files
+mkdir -p dists pool
+
+# Simple function to generate dists index
+cat > dists/index.html << 'EOF'
 <!DOCTYPE html>
 <html>
 <head>
@@ -885,18 +890,8 @@ jobs:
         
         <h2>Available Ubuntu Distributions:</h2>
         <ul>
-            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS (Jammy Jellyfish)
-                <ul>
-                    <li>Automatic libbpf upgrade in postinst if needed</li>
-                    <li>Compatible with both kernel 5.15.x and 6.8.x</li>
-                </ul>
-            </li>
-            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS (Noble Numbat)
-                <ul>
-                    <li>Uses native libbpf 1.7.0+</li>
-                    <li>No special handling required</li>
-                </ul>
-            </li>
+            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS (Jammy Jellyfish)</li>
+            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS (Noble Numbat)</li>
         </ul>
         
         <p><a href="../">← Back to main repository</a></p>
@@ -905,11 +900,11 @@ jobs:
 </html>
 EOF
 
-        # Generate pool/index.html with dynamic stats
-        JAMMY_COUNT=$(ls pool/jammy/*.deb 2>/dev/null | wc -l)
-        NOBLE_COUNT=$(ls pool/noble/*.deb 2>/dev/null | wc -l)
-        
-        cat > pool/index.html << EOF
+# Generate pool index with stats
+JAMMY_COUNT=$(ls pool/jammy/*.deb 2>/dev/null | wc -l)
+NOBLE_COUNT=$(ls pool/noble/*.deb 2>/dev/null | wc -l)
+
+cat > pool/index.html << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -921,64 +916,44 @@ EOF
         ul { line-height: 1.8; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        .info { background: #f0f9ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }
-        .stats { background: #f8f9fa; padding: 0.5rem; border-radius: 0.25rem; margin: 1rem 0; font-size: 0.9em; }
+        .stats { background: #f8f9fa; padding: 0.5rem; border-radius: 0.25rem; margin: 1rem 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>APT Repository - Package Pool</h1>
-        <div class="info">
-            <p>Package files (.deb) organized by Ubuntu distribution. Each directory contains all available versions.</p>
-        </div>
-        
         <div class="stats">
-            <p><strong>Jammy packages:</strong> ${JAMMY_COUNT} files</p>
-            <p><strong>Noble packages:</strong> ${NOBLE_COUNT} files</p>
+            <p><strong>Jammy packages:</strong> ${JAMMY_COUNT} files | <strong>Noble packages:</strong> ${NOBLE_COUNT} files</p>
             <p><strong>Last updated:</strong> $(date)</p>
         </div>
-        
-        <h2>Package Directories:</h2>
         <ul>
-            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS packages (.deb files)
-                <ul>
-                    <li>Includes automatic libbpf compatibility in postinst</li>
-                    <li>All package versions available for download</li>
-                </ul>
-            </li>
-            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS packages (.deb files)
-                <ul>
-                    <li>Uses native libbpf, no special handling</li>
-                    <li>All package versions available for download</li>
-                </ul>
-            </li>
+            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS packages</li>
+            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS packages</li>
         </ul>
-        
         <p><a href="../">← Back to main repository</a></p>
     </div>
 </body>
 </html>
 EOF
 
-        # Generate package index files for each distribution
-        for CODENAME in noble jammy; do
-          echo "Generating index for $CODENAME..."
-          
-          if [ "$CODENAME" = "jammy" ]; then
-            TITLE="Ubuntu 22.04 (Jammy)"
-            NOTE="These packages include automatic libbpf compatibility handling for Ubuntu 22.04. The postinst script will build and install a newer libbpf if needed."
-          else
-            TITLE="Ubuntu 24.04 (Noble)"
-            NOTE="These packages use the native libbpf 1.7.0+ available in Ubuntu 24.04. No special libbpf handling is required."
-          fi
-          
-          PKG_COUNT=$(ls pool/${CODENAME}/*.deb 2>/dev/null | wc -l)
-          
-          cat > pool/${CODENAME}/index.html << EOF
+# Generate package listings for each distribution
+for CODENAME in noble jammy; do
+  echo "Generating index for \$CODENAME..."
+  PKG_COUNT=\$(ls pool/\${CODENAME}/*.deb 2>/dev/null | wc -l)
+  
+  if [ "\$CODENAME" = "jammy" ]; then
+    TITLE="Ubuntu 22.04 (Jammy) - Package Files"
+    NOTE="Automatic libbpf compatibility handling included"
+  else
+    TITLE="Ubuntu 24.04 (Noble) - Package Files" 
+    NOTE="Uses native libbpf 1.7.0+"
+  fi
+  
+  cat > pool/\${CODENAME}/index.html << PKGEOF
 <!DOCTYPE html>
 <html>
 <head>
-    <title>${TITLE} - Package Files</title>
+    <title>\${TITLE}</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
         .container { max-width: 900px; margin: 0 auto; }
@@ -989,47 +964,37 @@ EOF
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
         .info { background: #f0f9ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }
-        .stats { background: #f8f9fa; padding: 0.5rem; border-radius: 0.25rem; margin: 1rem 0; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>${TITLE} - Package Files</h1>
-        
-        <div class="info">
-            <p>${NOTE}</p>
-        </div>
-        
-        <div class="stats">
-            <p><strong>Total packages:</strong> ${PKG_COUNT}</p>
-            <p><strong>Last updated:</strong> $(date)</p>
-        </div>
-        
+        <h1>\${TITLE}</h1>
+        <div class="info"><p>\${NOTE}</p></div>
+        <p><strong>Total packages:</strong> \${PKG_COUNT} | <strong>Last updated:</strong> \$(date)</p>
         <h2>Available Packages</h2>
-        <p>Click on any .deb file to download:</p>
-        
-        <div class="package-list">
-            <ul>
-EOF
+        <div class="package-list"><ul>
+PKGEOF
 
-          # List all .deb files in the directory
-          for deb in pool/${CODENAME}/*.deb; do
-            if [ -f "$deb" ]; then
-              filename=$(basename "$deb")
-              echo "                <li><a href=\"${filename}\">${filename}</a></li>" >> pool/${CODENAME}/index.html
-            fi
-          done
+  # List all .deb files
+  for deb in pool/\${CODENAME}/*.deb; do
+    if [ -f "\$deb" ]; then
+      filename=\$(basename "\$deb")
+      echo "<li><a href=\"\${filename}\">\${filename}</a></li>" >> pool/\${CODENAME}/index.html
+    fi
+  done
 
-          cat >> pool/${CODENAME}/index.html << 'EOF'
-            </ul>
-        </div>
-        
+  cat >> pool/\${CODENAME}/index.html << 'PKGEOF'
+        </ul></div>
         <p><a href="../">← Back to package pool</a> | <a href="../../">← Back to main repository</a></p>
     </div>
 </body>
 </html>
-EOF
-        done
+PKGEOF
+done
+SCRIPT_EOF
+
+        chmod +x /tmp/generate_index.sh
+        /tmp/generate_index.sh
 
         echo "DEBUG: Adding files to git..."
         git add -A

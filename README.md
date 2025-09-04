@@ -128,6 +128,19 @@ tty-egpf-monitor remove 0
 tty-egpf-monitor remove /dev/ttyUSB0
 ```
 
+## 📋 Sample Log Output
+
+```
+[04.09.25 14:52:46.874] MODE_CHANGE: PASSIVE mode (foreign process using port)
+[04.09.25 14:52:46.875] OPEN: picocom opened port (baud: 115200)
+[04.09.25 14:52:46.875] IOCTL: picocom ioctl cmd=0x5401
+[04.09.25 14:52:49.023] WRITE: picocom APP->DEV "\x0d"
+[04.09.25 14:52:52.156] WRITE: picocom APP->DEV "Hello World\x0a"
+[04.09.25 14:53:15.789] IOCTL: picocom ioctl cmd=0x540b
+[04.09.25 14:53:15.790] MODE_CHANGE: ACTIVE mode (port free)
+[04.09.25 14:53:15.790] CLOSE: picocom closed port
+```
+
 ## 🐳 Container Usage
 Mount the host socket and log directory into the container:
 ```bash

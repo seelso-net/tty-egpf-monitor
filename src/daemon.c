@@ -207,7 +207,7 @@ static void log_simple_event(uint32_t port_idx, const char *event_type, const ch
     if (g_log_mode == LOG_MODE_SIMPLE) {
         struct tm *tm_info = localtime(&ts.tv_sec);
         char time_str[32];
-        strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+        strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
         fprintf(port_logs[port_idx], "[%s.%03ld] %s: %s\n", 
                 time_str, ts.tv_nsec / 1000000, event_type, details);
     }
@@ -222,7 +222,7 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
     if (g_log_mode == LOG_MODE_SIMPLE) {
         struct tm *tm_info = localtime(&ts.tv_sec);
         char time_str[32];
-        strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+        strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
         fprintf(port_logs[port_idx], "[%s.%03ld] %s: ", time_str, ts.tv_nsec / 1000000, direction);
         
         // Use proper escaping and quoting for data
@@ -677,20 +677,20 @@ static void log_event_json(const struct event *e)
         if (e->type == 1) { // OPEN
             struct tm *tm_info = localtime(&ts.tv_sec);
             char time_str[32];
-            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
             fprintf(f, "[%s.%03ld] %s: %s opened port (baud: %d)\n", 
                     time_str, ts.tv_nsec / 1000000, etype, e->comm, port_baudrates[idx]);
         } else if (e->type == 2) { // CLOSE
             struct tm *tm_info = localtime(&ts.tv_sec);
             char time_str[32];
-            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
             fprintf(f, "[%s.%03ld] %s: %s closed port\n", 
                     time_str, ts.tv_nsec / 1000000, etype, e->comm);
         } else if (e->type == 3 || e->type == 4) { // READ/WRITE
             const char *dir = e->type==4?"APP->DEV":"DEV->APP";
             struct tm *tm_info = localtime(&ts.tv_sec);
             char time_str[32];
-            strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+            strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
             fprintf(f, "[%s.%03ld] %s: %s %s ", time_str, ts.tv_nsec / 1000000, etype, e->comm, dir);
             
             // Show data with proper escaping and quoting
@@ -702,7 +702,7 @@ static void log_event_json(const struct event *e)
             if (is_important_ioctl(e->cmd)) {
                 struct tm *tm_info = localtime(&ts.tv_sec);
                 char time_str[32];
-                strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S", tm_info);
+                strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
                 fprintf(f, "[%s.%03ld] %s: %s ioctl cmd=0x%x\n", 
                         time_str, ts.tv_nsec / 1000000, etype, e->comm, e->cmd);
             }
