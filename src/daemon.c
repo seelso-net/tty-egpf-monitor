@@ -734,29 +734,29 @@ static void log_event_json(const struct event *e)
         }
     } else {
         // Advanced, machine-readable format (original JSON)
-        struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
-        const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
-        fprintf(f,
-            "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"%s\",\"pid\":%u,\"tgid\":%u,\"comm\":\"%.*s\",\"port_idx\":%u",
-            (uint64_t)ts.tv_sec, ts.tv_nsec, etype, e->pid, e->tgid, 16, e->comm, idx);
+    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
+    const char *etype = e->type==1?"open":e->type==2?"close":e->type==3?"read":e->type==4?"write":"ioctl";
+    fprintf(f,
+        "{\"ts\":%" PRIu64 ".%09ld,\"type\":\"%s\",\"pid\":%u,\"tgid\":%u,\"comm\":\"%.*s\",\"port_idx\":%u",
+        (uint64_t)ts.tv_sec, ts.tv_nsec, etype, e->pid, e->tgid, 16, e->comm, idx);
             
-        if (e->type == 3 || e->type == 4) {
+    if (e->type == 3 || e->type == 4) {
             // CRITICAL: Validate data_len to prevent buffer overrun crashes
             if (e->data_len > MAX_DATA) {
                 fprintf(stderr, "ERROR: Invalid data_len=%u > MAX_DATA=%d\n", e->data_len, MAX_DATA);
                 fprintf(f, ",\"error\":\"data_len_invalid\"");
             } else {
                 fprintf(f, ",\"dir\":\"%s\",\"len\":%u,\"trunc\":%u,\"data\":",
-                        e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
+                e->type==4?"app2dev":"dev2app", e->data_len, e->data_trunc);
                 // Safe data output with proper escaping and quoting
                 char escaped_data[512];
                 escape_data_for_log(e->data, e->data_len, escaped_data, sizeof(escaped_data));
                 fprintf(f, "%s", escaped_data);
             }
-        } else if (e->type == 5) {
-            fprintf(f, ",\"cmd\":%u", e->cmd);
-        }
-        fprintf(f, "}\n");
+    } else if (e->type == 5) {
+        fprintf(f, ",\"cmd\":%u", e->cmd);
+    }
+    fprintf(f, "}\n");
     }
     fflush(f);
 }
@@ -790,7 +790,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Only log events that pass our real application filter
     if (is_real_application(e)) {
-        log_event_json(e);
+    log_event_json(e);
     }
     
     pthread_mutex_unlock(&ports_mu);
@@ -956,8 +956,8 @@ static void reopen_existing_logs(void)
     // Ports will be added dynamically via API calls
     
     // Try to enter active mode for any existing ports
-    for (uint32_t i = 0; i < target_count; i++) {
-        if (ports[i][0] != '\0') {
+        for (uint32_t i = 0; i < target_count; i++) {
+            if (ports[i][0] != '\0') {
             enter_active_mode(i);
         }
     }
@@ -969,12 +969,12 @@ static void *fd_scanner_thread(void *arg)
             // FD scanner thread started
     int scan_count = 0;
     while (!stop_flag) {
-        pthread_mutex_lock(&ports_mu);
+    pthread_mutex_lock(&ports_mu);
         uint32_t cnt = target_count;
         char devs[MAX_PORTS][256];
         for (uint32_t i=0;i<cnt;i++) snprintf(devs[i], sizeof(devs[i]), "%s", ports[i]);
-        pthread_mutex_unlock(&ports_mu);
-        
+    pthread_mutex_unlock(&ports_mu);
+    
         if (cnt > 0) {
             scan_count++;
             // FD scanner running scan #%d for %u devices
@@ -1083,7 +1083,7 @@ static void scan_existing_fds(const char *devpath, uint32_t port_idx)
                     uint8_t one = 1;
                     
                 // Found matching fd %d in process %u (%s) for %s
-                
+                    
                     int fd_interest_fd = bpf_map__fd(g_skel->maps.fd_interest);
                     int fd_portidx_fd = bpf_map__fd(g_skel->maps.fd_portidx);
                     
@@ -1582,13 +1582,37 @@ int main(int argc, char **argv)
     
             // Scratch buffers initialized
     
-    // Ensure exit read tracepoint is enabled for RX capture
-    int fd = open("/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable", O_WRONLY);
-    if (fd >= 0) {
-        if (write(fd, "1", 1) < 0) {
-            fprintf(stderr, "Warning: failed to enable tracepoint: %s\n", strerror(errno));
+    // Enable all required tracepoints for Ubuntu 24.04 compatibility
+    const char* tracepoints[] = {
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_openat/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_exit_openat/enable", 
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_openat2/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_exit_openat2/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_close/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_exit_close/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_write/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_writev/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_read/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_exit_read/enable",
+        "/sys/kernel/debug/tracing/events/syscalls/sys_enter_ioctl/enable",
+        "/sys/kernel/debug/tracing/events/raw_syscalls/sys_enter/enable",
+        "/sys/kernel/debug/tracing/events/raw_syscalls/sys_exit/enable",
+        NULL
+    };
+    
+    fprintf(stderr, "Enabling required tracepoints for Ubuntu 24.04 compatibility...\n");
+    for (int i = 0; tracepoints[i] != NULL; i++) {
+        int fd = open(tracepoints[i], O_WRONLY);
+        if (fd >= 0) {
+            if (write(fd, "1", 1) < 0) {
+                fprintf(stderr, "Warning: failed to enable %s: %s\n", tracepoints[i], strerror(errno));
+            } else {
+                fprintf(stderr, "Enabled: %s\n", tracepoints[i]);
+            }
+            close(fd);
+        } else {
+            fprintf(stderr, "Warning: could not open %s: %s\n", tracepoints[i], strerror(errno));
         }
-        close(fd);
     }
     
     int attach_err = sniffer_bpf__attach(g_skel);
