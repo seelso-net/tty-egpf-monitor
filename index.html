@@ -17,15 +17,21 @@
         <div class="section">
             <h2>Installation</h2>
             <p>Add this repository to your system:</p>
-            <pre><code># Add GPG key
-wget -O - https://seelso-net.github.io/tty-egpf-monitor/public-apt-key.asc | sudo apt-key add -
+            <pre><code># Add GPG key (modern method)
+CODENAME=$(lsb_release -cs)
+REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
+curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
 
 # Add repository
-echo "deb [trusted=yes] https://seelso-net.github.io/tty-egpf-monitor $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
+echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 
 # Update and install
 sudo apt-get update
-sudo apt-get install tty-egpf-monitord tty-egpf-monitor-cli</code></pre>
+sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
+sudo systemctl enable --now tty-egpf-monitord</code></pre>
+            
+            <p><strong>One-command install:</strong></p>
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/install.sh | bash</code></pre>
         </div>
 
         <div class="section">
@@ -38,18 +44,52 @@ sudo apt-get install tty-egpf-monitord tty-egpf-monitor-cli</code></pre>
 
         <div class="section">
             <h2>Repository Structure</h2>
+            <h3>Ubuntu 22.04 (Jammy)</h3>
             <ul>
-                <li><a href="dists/">dists/</a> - Distribution metadata</li>
-                <li><a href="pool/">pool/</a> - Package files</li>
-                <li><a href="public-apt-key.asc">public-apt-key.asc</a> - GPG public key</li>
+                <li><a href="dists/jammy/">dists/jammy/</a> - Package metadata</li>
+                <li><a href="pool/jammy/">pool/jammy/</a> - Package files (.deb)</li>
+                <li><a href="dists/jammy/Release">Release</a> | <a href="dists/jammy/Release.gpg">Release.gpg</a> - Signatures</li>
+            </ul>
+            
+            <h3>Ubuntu 24.04 (Noble)</h3>
+            <ul>
+                <li><a href="dists/noble/">dists/noble/</a> - Package metadata</li>
+                <li><a href="pool/noble/">pool/noble/</a> - Package files (.deb)</li>
+                <li><a href="dists/noble/Release">Release</a> | <a href="dists/noble/Release.gpg">Release.gpg</a> - Signatures</li>
+            </ul>
+            
+            <h3>Security</h3>
+            <ul>
+                <li><a href="public-apt-key.asc">public-apt-key.asc</a> - GPG public key (ASCII)</li>
+                <li><a href="public-apt-key.gpg">public-apt-key.gpg</a> - GPG public key (binary)</li>
             </ul>
         </div>
 
         <div class="section">
-            <h2>Supported Distributions</h2>
+            <h2>Usage Examples</h2>
+            <pre><code># Add a port to monitor
+tty-egpf-monitor add /dev/ttyUSB0 115200
+
+# List configured ports
+tty-egpf-monitor list
+
+# Live stream events (by index or device name)
+tty-egpf-monitor stream /dev/ttyUSB0
+
+# Download full log
+tty-egpf-monitor logs /dev/ttyUSB0 > captured.jsonl
+
+# Remove monitoring
+tty-egpf-monitor remove /dev/ttyUSB0</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>Documentation</h2>
             <ul>
-                <li>Ubuntu 22.04 (jammy)</li>
-                <li>Ubuntu 24.04 (noble)</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/README.md">README.md</a> - Overview and quick start</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/INSTALLATION.md">INSTALLATION.md</a> - Detailed installation guide</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor/blob/main/UBUNTU_22_04_COMPATIBILITY.md">Ubuntu 22.04 Compatibility</a> - Jammy support details</li>
+                <li><a href="https://github.com/seelso-net/tty-egpf-monitor">GitHub Repository</a> - Source code and issues</li>
             </ul>
         </div>
     </div>
