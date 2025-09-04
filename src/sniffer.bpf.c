@@ -629,16 +629,11 @@ int tp_enter_write(struct trace_event_raw_sys_enter *ctx)
     k.fd = fd;
     __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
     if (!idxp) return 0;
-
-    /* Emit OPEN once on first write only; ensure fd was opened writable */
+    /* Only log WRITE if fd was opened writable and OPEN was already emitted */
     __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
     if (!was_wr) return 0;
     __u8 *em = bpf_map_lookup_elem(&fd_open_emitted, &k);
-    if (!em) {
-        __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
-        struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-        if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=0; o->dir=0; o->port_idx=*idxp; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
-    }
+    if (!em) return 0;
 
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) return 0;
