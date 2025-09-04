@@ -11,7 +11,7 @@ CODENAME=$(lsb_release -cs)
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
 
 # Add the repository key and source
-sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.asc) /usr/share/keyrings/tty-egpf-monitor.gpg
+curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
 ```
@@ -88,8 +88,8 @@ After installation, verify everything is working:
 # 1. Check service status
 sudo systemctl status tty-egpf-monitord
 
-# 2. Check socket exists
-ls -la /run/tty-egpf-monitord.sock
+# 2. Check socket exists (service creates it when running)
+ls -la /run/tty-egpf-monitord.sock || true
 
 # 3. Test CLI connection
 tty-egpf-monitor list
@@ -128,17 +128,14 @@ sudo tty-egpf-monitor remove 0
 - **Logs**: `/var/log/tty-egpf-monitor/`
 - **Configuration**: `/var/log/tty-egpf-monitor/daemon.conf`
 
-### Custom Configuration
+### Runtime Configuration
 
-Create a configuration file:
+Configuration persistence is intentionally disabled; add ports via the CLI at runtime or use systemd to run post-start commands. Example:
 
-```bash
-sudo mkdir -p /var/log/tty-egpf-monitor
-sudo tee /var/log/tty-egpf-monitor/daemon.conf << EOF
-# Default ports to monitor on startup
-/dev/ttyUSB0
-/dev/ttyUSB1
-EOF
+```ini
+[Service]
+ExecStartPost=/usr/bin/tty-egpf-monitor add /dev/ttyUSB0 115200
+ExecStartPost=/usr/bin/tty-egpf-monitor add /dev/ttyUSB1 115200
 ```
 
 ### Service Configuration
@@ -231,13 +228,13 @@ sudo make install
 sudo ldconfig
 ```
 
-### Debug Mode
+### Debug Tips
 
-Run the daemon in debug mode:
-
-```bash
-sudo tty-egpf-monitord --debug --socket /tmp/debug.sock --log-dir /tmp/debug-logs
-```
+- Run foreground with custom paths:
+  ```bash
+  sudo tty-egpf-monitord --socket /tmp/debug.sock --log-dir /tmp/debug-logs
+  ```
+- Tail service logs: `sudo journalctl -u tty-egpf-monitord -f`
 
 ### Log Locations
 

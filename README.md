@@ -24,6 +24,13 @@ A sophisticated real-time serial port monitoring tool that combines the power of
 ### 📊 **Per-port Logs**
 - Stored as NDJSON under `/var/log/tty-egpf-monitor/<tty>.jsonl` by default
 - Overridable per-port log path at add time
+- Human-readable mode with millisecond timestamps; data is quoted and non-printable bytes are escaped as `\\xNN`
+
+### 🧹 Noise-free, attribute-based filtering
+- OPEN is emitted immediately only for writable opens
+- READ/WRITE are logged only for FDs opened writable and after OPEN was emitted
+- IOCTLs are limited to important TTY-related ones
+- Effectively eliminates systemd/udisks/housekeeping scanners and container runtime noise
 
 ## 🏗️ Architecture
 
@@ -48,7 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/seelso-net/tty-egpf-monitor/main/in
 # Add repository and install
 CODENAME=$(lsb_release -cs)
 REPO_URL=https://seelso-net.github.io/tty-egpf-monitor
-sudo install -m 0644 <(curl -fsSL ${REPO_URL}/public-apt-key.asc) /usr/share/keyrings/tty-egpf-monitor.gpg
+curl -fsSL ${REPO_URL}/public-apt-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/tty-egpf-monitor.gpg
 echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${CODENAME} main" | sudo tee /etc/apt/sources.list.d/tty-egpf-monitor.list
 sudo apt-get update
 sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
@@ -106,11 +113,13 @@ tty-egpf-monitor add /dev/ttyUSB0
 # List configured ports
 tty-egpf-monitor list
 
-# Bulk download NDJSON log for port index 0
+# Bulk download NDJSON log for port (by index or device)
 tty-egpf-monitor logs 0 > ttyUSB0.jsonl
+tty-egpf-monitor logs /dev/ttyUSB0 > ttyUSB0.jsonl
 
-# Live stream
+# Live stream (by index or device)
 tty-egpf-monitor stream 0
+tty-egpf-monitor stream /dev/ttyUSB0
 
 # Remove by index
 tty-egpf-monitor remove 0
@@ -135,6 +144,8 @@ sudo tty-egpf-monitord \
   --socket /run/tty-egpf-monitord.sock \
   --log-dir /var/log/tty-egpf-monitor
 ```
+
+Note: configuration persistence is intentionally disabled. Add ports at runtime via the CLI. If you need ports configured on boot, use a systemd drop-in with ExecStartPost to call the CLI.
 
 ## API (for reference)
 - `GET /ports` → list: `[ {"idx":0, "dev":"/dev/ttyUSB0"}, ... ]`
