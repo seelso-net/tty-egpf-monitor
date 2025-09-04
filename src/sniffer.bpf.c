@@ -63,7 +63,7 @@ char LICENSE[] SEC("license") = "GPL";
 /* Limit bytes compared in verifier-safe loop */
 #define COMPARE_MAX 128
 /* Maximum number of concurrently monitored target paths */
-#define MAX_TARGETS 16
+#define MAX_TARGETS 32
 
 /* Minimal stat mode bits for character device check */
 #ifndef S_IFMT

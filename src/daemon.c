@@ -39,7 +39,7 @@ struct fdkey { uint32_t tgid; int32_t fd; };
 #define MAX_DATA 256
 #define MAX_PATH 256
 // Must match MAX_TARGETS in sniffer.bpf.c
-#define MAX_TARGETS 16
+#define MAX_TARGETS 32
 struct pathval { char path[MAX_PATH]; };
 
 /* Additional structs needed for BPF scratch buffers */
@@ -686,8 +686,25 @@ static void log_event_json(const struct event *e)
             struct tm *tm_info = localtime(&ts.tv_sec);
             char time_str[32];
             strftime(time_str, sizeof(time_str), "%d.%m.%y %H:%M:%S", tm_info);
+            
+            // Try to get actual baudrate from device, fallback to configured baudrate
+            int actual_baud = port_baudrates[idx];  // Default to configured
+            char cmd[512]; 
+            snprintf(cmd, sizeof(cmd), "stty -F %s speed 2>/dev/null", ports[idx]);
+            FILE *pf = popen(cmd, "r");
+            if (pf) {
+                char line[64];
+                if (fgets(line, sizeof(line), pf)) {
+                    int parsed_baud = atoi(line);
+                    if (parsed_baud > 0) {
+                        actual_baud = parsed_baud;
+                    }
+                }
+                pclose(pf);
+            }
+            
             fprintf(f, "[%s.%03ld] %s: %s opened port (baud: %d)\n", 
-                    time_str, ts.tv_nsec / 1000000, etype, e->comm, port_baudrates[idx]);
+                    time_str, ts.tv_nsec / 1000000, etype, e->comm, actual_baud);
         } else if (e->type == 2) { // CLOSE
             struct tm *tm_info = localtime(&ts.tv_sec);
             char time_str[32];
@@ -829,8 +846,8 @@ static int sync_targets_map(void)
     int tc_fd = bpf_map__fd(g_skel->maps.target_count);
     if (tc_fd >= 0) {
         uint32_t k0 = 0;
-        // Store actual target_count, BPF will check up to MAX_TARGETS
-        uint32_t effective_count = target_count * 2;  // Include alias entries
+        // BPF program should check all possible slots (including alias slots)
+        uint32_t effective_count = MAX_TARGETS;  // Check full range for aliases
         if (bpf_map_update_elem(tc_fd, &k0, &effective_count, BPF_ANY)) return -1;
     }
     return 0;
@@ -861,6 +878,8 @@ static int api_add_port(const char *devpath, const char *logpath, int baudrate, 
     snprintf(original_paths[idx], sizeof(original_paths[idx]), "%s", devpath);
     // Store resolved path for BPF matching and active mode operations
     snprintf(ports[idx], sizeof(ports[idx]), "%s", resolved_path);
+    
+    // fprintf(stderr, "DEBUG: api_add_port idx=%u original='%s' resolved='%s'\n", idx, original_paths[idx], ports[idx]);
     
     // Store baudrate for this port
     port_baudrates[idx] = baudrate;
@@ -1170,7 +1189,9 @@ static void handle_http_client(int cfd)
         char body[4096];
         size_t off = 0; off += snprintf(body+off, sizeof(body)-off, "[");
         for (uint32_t i=0;i<target_count;i++) {
-            off += snprintf(body+off, sizeof(body)-off, "%s{\"idx\":%u,\"dev\":\"%s\"}", i?",":"", i, ports[i]);
+            // Show original path (alias) to user, not resolved path
+            const char *display_path = (original_paths[i][0] != '\0') ? original_paths[i] : ports[i];
+            off += snprintf(body+off, sizeof(body)-off, "%s{\"idx\":%u,\"dev\":\"%s\"}", i?",":"", i, display_path);
         }
         off += snprintf(body+off, sizeof(body)-off, "]");
         pthread_mutex_unlock(&ports_mu);
