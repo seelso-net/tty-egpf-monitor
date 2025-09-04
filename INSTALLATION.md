@@ -63,6 +63,46 @@ make
 sudo make install
 ```
 
+## 🐍 Python Client Installation
+
+Install the Python client library for programmatic access and automation:
+
+```bash
+# Install from PyPI
+pip install tty-egpf-monitor
+
+# Verify installation
+tty-egpf-monitor-py --help
+python -c "import tty_egpf_monitor; print(tty_egpf_monitor.__version__)"
+```
+
+### Python Usage Examples
+
+**Basic library usage:**
+```python
+from tty_egpf_monitor import TTYMonitorClient
+
+client = TTYMonitorClient()
+idx = client.add_port("/dev/ttyUSB0", baudrate=115200)
+
+# Stream live events
+for entry in client.stream_parsed_logs("/dev/ttyUSB0"):
+    print(f"{entry.timestamp}: {entry.event_type} by {entry.process}")
+    if entry.data:
+        print(f"  Data: {entry.data}")
+```
+
+**CLI usage (compatible with C version):**
+```bash
+tty-egpf-monitor-py add /dev/ttyUSB0 115200
+tty-egpf-monitor-py list
+tty-egpf-monitor-py stream /dev/ttyUSB0
+tty-egpf-monitor-py logs 0 > captured.jsonl
+tty-egpf-monitor-py remove /dev/ttyUSB0
+```
+
+**Note:** The daemon (`tty-egpf-monitord`) must still be installed and running. The Python client is just an alternative interface to the same daemon.
+
 ## 🐳 Docker Installation
 
 For containerized environments:

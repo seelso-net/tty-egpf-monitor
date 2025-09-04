@@ -1,0 +1,11 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include examples *.py *.md
+recursive-include tty_egpf_monitor *.py
+exclude tests/*
+exclude .git*
+exclude .pytest_cache
+exclude __pycache__
+exclude *.pyc
+exclude *.pyo

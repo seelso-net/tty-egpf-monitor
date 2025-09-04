@@ -82,13 +82,40 @@ make
 sudo make install
 ```
 
+### 🐍 Python Client
+
+Install the Python client library for programmatic access:
+
+```bash
+pip install tty-egpf-monitor
+```
+
+**Python Usage:**
+```python
+from tty_egpf_monitor import TTYMonitorClient
+
+client = TTYMonitorClient()
+idx = client.add_port("/dev/ttyUSB0", baudrate=115200)
+
+# Stream live events
+for entry in client.stream_parsed_logs("/dev/ttyUSB0"):
+    print(f"{entry.timestamp}: {entry.event_type} by {entry.process}")
+```
+
+**Python CLI:**
+```bash
+tty-egpf-monitor-py add /dev/ttyUSB0 115200
+tty-egpf-monitor-py stream /dev/ttyUSB0
+```
+
 ### 🐳 Docker Support
 
 For containerized environments, see the [Docker section in INSTALLATION.md](INSTALLATION.md#docker-installation).
 
 ### 📦 Package Information
 
-- **Repository**: GitHub Pages-hosted APT repository
+- **APT Repository**: GitHub Pages-hosted APT repository for daemon
+- **PyPI Package**: Python client library available via pip
 - **Signing**: GPG-signed packages for security
 - **Supported**: Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble)
 
