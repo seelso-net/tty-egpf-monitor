@@ -1099,9 +1099,6 @@ static void http_send(int cfd, int code, const char *ctype, const char *body)
     snprintf(header, sizeof(header), "HTTP/1.1 %d\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
              code, ctype, body ? strlen(body) : 0);
     
-    fprintf(stderr, "DEBUG: http_send code=%d, ctype='%s', body='%s', body_len=%zu\n", 
-            code, ctype, body ? body : "(null)", body ? strlen(body) : 0);
-    
     // Write headers
     if (write(cfd, header, strlen(header)) < 0) {
         fprintf(stderr, "Warning: failed to write headers: %s\n", strerror(errno));
@@ -1134,13 +1131,10 @@ static void handle_http_client(int cfd)
         pthread_mutex_lock(&ports_mu);
         char body[4096];
         size_t off = 0; off += snprintf(body+off, sizeof(body)-off, "[");
-        fprintf(stderr, "DEBUG: GET /ports: target_count=%u\n", target_count);
         for (uint32_t i=0;i<target_count;i++) {
-            fprintf(stderr, "DEBUG: port[%u]='%s'\n", i, ports[i]);
             off += snprintf(body+off, sizeof(body)-off, "%s{\"idx\":%u,\"dev\":\"%s\"}", i?",":"", i, ports[i]);
         }
         off += snprintf(body+off, sizeof(body)-off, "]");
-        fprintf(stderr, "DEBUG: GET /ports response body='%s', off=%zu\n", body, off);
         pthread_mutex_unlock(&ports_mu);
         http_send(cfd, 200, "application/json", body);
     } else if (!strncmp(buf, "GET /logs/", 10)) {
