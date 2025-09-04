@@ -854,147 +854,35 @@ jobs:
           done
         fi
 
-        # Generate package index files for directory browsing
-        echo "Generating package index files..."
+        # Generate basic directory index files (simplified to avoid YAML issues)
+        echo "Creating basic directory index files..."
+        mkdir -p dists pool
         
-        # Create a script to generate index files (avoids YAML heredoc issues)
-        cat > /tmp/generate_index.sh << 'SCRIPT_EOF'
-#!/bin/bash
-set -e
-
-# Create directory index files
-mkdir -p dists pool
-
-# Simple function to generate dists index
-cat > dists/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>APT Repository - Distributions</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { color: #2563eb; }
-        ul { line-height: 1.8; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .info { background: #f0f9ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>APT Repository - Distributions</h1>
-        <div class="info">
-            <p>This APT repository supports both Ubuntu LTS versions with automatic compatibility handling.</p>
-        </div>
+        # Create simple dists index
+        echo '<!DOCTYPE html><html><head><title>APT Distributions</title></head><body><h1>APT Repository - Distributions</h1><ul><li><a href="jammy/">jammy/</a> - Ubuntu 22.04</li><li><a href="noble/">noble/</a> - Ubuntu 24.04</li></ul><p><a href="../">← Back</a></p></body></html>' > dists/index.html
         
-        <h2>Available Ubuntu Distributions:</h2>
-        <ul>
-            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS (Jammy Jellyfish)</li>
-            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS (Noble Numbat)</li>
-        </ul>
+        # Create simple pool index  
+        echo '<!DOCTYPE html><html><head><title>Package Pool</title></head><body><h1>Package Pool</h1><ul><li><a href="jammy/">jammy/</a> - Ubuntu 22.04 packages</li><li><a href="noble/">noble/</a> - Ubuntu 24.04 packages</li></ul><p><a href="../">← Back</a></p></body></html>' > pool/index.html
         
-        <p><a href="../">← Back to main repository</a></p>
-    </div>
-</body>
-</html>
-EOF
-
-# Generate pool index with stats
-JAMMY_COUNT=$(ls pool/jammy/*.deb 2>/dev/null | wc -l)
-NOBLE_COUNT=$(ls pool/noble/*.deb 2>/dev/null | wc -l)
-
-cat > pool/index.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>APT Repository - Package Pool</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { color: #2563eb; }
-        ul { line-height: 1.8; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .stats { background: #f8f9fa; padding: 0.5rem; border-radius: 0.25rem; margin: 1rem 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>APT Repository - Package Pool</h1>
-        <div class="stats">
-            <p><strong>Jammy packages:</strong> ${JAMMY_COUNT} files | <strong>Noble packages:</strong> ${NOBLE_COUNT} files</p>
-            <p><strong>Last updated:</strong> $(date)</p>
-        </div>
-        <ul>
-            <li><a href="jammy/">jammy/</a> - Ubuntu 22.04 LTS packages</li>
-            <li><a href="noble/">noble/</a> - Ubuntu 24.04 LTS packages</li>
-        </ul>
-        <p><a href="../">← Back to main repository</a></p>
-    </div>
-</body>
-</html>
-EOF
-
-# Generate package listings for each distribution
-for CODENAME in noble jammy; do
-  echo "Generating index for \$CODENAME..."
-  PKG_COUNT=\$(ls pool/\${CODENAME}/*.deb 2>/dev/null | wc -l)
-  
-  if [ "\$CODENAME" = "jammy" ]; then
-    TITLE="Ubuntu 22.04 (Jammy) - Package Files"
-    NOTE="Automatic libbpf compatibility handling included"
-  else
-    TITLE="Ubuntu 24.04 (Noble) - Package Files" 
-    NOTE="Uses native libbpf 1.7.0+"
-  fi
-  
-  cat > pool/\${CODENAME}/index.html << PKGEOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>\${TITLE}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { color: #2563eb; }
-        .package-list { font-family: monospace; font-size: 0.9em; line-height: 1.6; }
-        .package-list a { color: #2563eb; text-decoration: none; display: block; padding: 0.2em 0; }
-        .package-list a:hover { text-decoration: underline; background: #f0f9ff; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .info { background: #f0f9ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>\${TITLE}</h1>
-        <div class="info"><p>\${NOTE}</p></div>
-        <p><strong>Total packages:</strong> \${PKG_COUNT} | <strong>Last updated:</strong> \$(date)</p>
-        <h2>Available Packages</h2>
-        <div class="package-list"><ul>
-PKGEOF
-
-  # List all .deb files
-  for deb in pool/\${CODENAME}/*.deb; do
-    if [ -f "\$deb" ]; then
-      filename=\$(basename "\$deb")
-      echo "<li><a href=\"\${filename}\">\${filename}</a></li>" >> pool/\${CODENAME}/index.html
-    fi
-  done
-
-  cat >> pool/\${CODENAME}/index.html << 'PKGEOF'
-        </ul></div>
-        <p><a href="../">← Back to package pool</a> | <a href="../../">← Back to main repository</a></p>
-    </div>
-</body>
-</html>
-PKGEOF
-done
-SCRIPT_EOF
-
-        chmod +x /tmp/generate_index.sh
-        /tmp/generate_index.sh
+        # Create package listing for jammy
+        echo '<!DOCTYPE html><html><head><title>Ubuntu 22.04 Packages</title></head><body><h1>Ubuntu 22.04 (Jammy) Packages</h1><p>Package files:</p><ul>' > pool/jammy/index.html
+        for deb in pool/jammy/*.deb; do
+          if [ -f "$deb" ]; then
+            filename=$(basename "$deb")
+            echo "<li><a href=\"${filename}\">${filename}</a></li>" >> pool/jammy/index.html
+          fi
+        done
+        echo '</ul><p><a href="../">← Back</a></p></body></html>' >> pool/jammy/index.html
+        
+        # Create package listing for noble
+        echo '<!DOCTYPE html><html><head><title>Ubuntu 24.04 Packages</title></head><body><h1>Ubuntu 24.04 (Noble) Packages</h1><p>Package files:</p><ul>' > pool/noble/index.html
+        for deb in pool/noble/*.deb; do
+          if [ -f "$deb" ]; then
+            filename=$(basename "$deb")
+            echo "<li><a href=\"${filename}\">${filename}</a></li>" >> pool/noble/index.html
+          fi
+        done
+        echo '</ul><p><a href="../">← Back</a></p></body></html>' >> pool/noble/index.html
 
         echo "DEBUG: Adding files to git..."
         git add -A
