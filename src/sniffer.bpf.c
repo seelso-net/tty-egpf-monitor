@@ -500,10 +500,15 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
     bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    /* Record writability per fd for later gating */
+    /* Record writability per fd and emit OPEN immediately only if writable */
     __u8 *wr = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr && *wr) {
         __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
+        /* Emit OPEN now for writable opens */
+        struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+        if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
+        /* Mark emitted to allow READ logging */
+        bpf_map_update_elem(&fd_open_emitted, &k, wr, BPF_ANY);
     }
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
@@ -529,6 +534,9 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr2 && *wr2) {
         __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
+        struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
+        if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=ret; o2->dir=0; o2->port_idx=midx; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
+        bpf_map_update_elem(&fd_open_emitted, &k, wr2, BPF_ANY);
     }
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
@@ -708,13 +716,7 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
         return 0;
     }
 
-    /* Emit OPEN once on first usage */
-    __u8 *em2 = bpf_map_lookup_elem(&fd_open_emitted, &k);
-    if (!em2) {
-        __u8 one = 1; bpf_map_update_elem(&fd_open_emitted, &k, &one, BPF_ANY);
-        struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
-        if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=0; o2->dir=0; o2->port_idx=*idxp; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
-    }
+    /* Do NOT emit OPEN from READ path */
 
     /* For reliability across kernels/verifier, do not copy DEV->APP payload here */
     struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
