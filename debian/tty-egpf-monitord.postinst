@@ -11,15 +11,31 @@ case "$1" in
         # Check Ubuntu version and upgrade libbpf if needed
         if [ -f /etc/os-release ]; then
             . /etc/os-release
-            if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "22.04" ]; then
-                echo "Ubuntu 22.04 (jammy) detected - scheduling libbpf upgrade for BPF compatibility..."
+            if [ "$ID" = "ubuntu" ] && ([ "$VERSION_ID" = "22.04" ] || [ "$VERSION_ID" = "24.04" ]); then
+                echo "Ubuntu $VERSION_ID detected - scheduling libbpf upgrade for BPF compatibility..."
                 
                 # Check current libbpf version
-                CURRENT_LIBBPF=$(dpkg -l | grep libbpf0 | awk '{print $3}' | cut -d: -f2 | cut -d- -f1)
+                CURRENT_LIBBPF=$(dpkg -l | grep -E "libbpf[0-9]*" | awk '{print $3}' | cut -d: -f2 | cut -d- -f1 | head -1)
                 echo "Current system libbpf version: $CURRENT_LIBBPF"
                 
-                if [ "$CURRENT_LIBBPF" = "0.5.0" ]; then
-                    echo "System has libbpf 0.5.0 - scheduling upgrade to 1.6.2+ for BPF tracepoint compatibility..."
+                # Check if libbpf upgrade is needed (for 22.04 with 0.5.0, or 24.04 with incompatible versions)
+                NEEDS_UPGRADE=false
+                if [ "$VERSION_ID" = "22.04" ] && [ "$CURRENT_LIBBPF" = "0.5.0" ]; then
+                    echo "Ubuntu 22.04 with libbpf 0.5.0 - needs upgrade for BPF tracepoint compatibility"
+                    NEEDS_UPGRADE=true
+                elif [ "$VERSION_ID" = "24.04" ]; then
+                    echo "Ubuntu 24.04 - checking if libbpf upgrade needed for compatibility"
+                    # For 24.04, always ensure we have our tested version to avoid compatibility issues
+                    if [ ! -f /usr/local/lib64/libbpf.so.1.6.2 ] && [ ! -f /usr/local/lib/libbpf.so.1.6.2 ]; then
+                        echo "libbpf 1.6.2 not found in /usr/local - scheduling upgrade for compatibility"
+                        NEEDS_UPGRADE=true
+                    else
+                        echo "libbpf 1.6.2 already installed in /usr/local - no upgrade needed"
+                    fi
+                fi
+                
+                if [ "$NEEDS_UPGRADE" = "true" ]; then
+                    echo "Scheduling libbpf 1.6.2 upgrade for BPF compatibility..."
                     
                     # Create a background upgrade script to avoid package manager conflicts
                     cat > /tmp/upgrade_libbpf.sh << 'EOF'
@@ -93,10 +109,10 @@ EOF
                     echo "Check progress with: tail -f /tmp/libbpf_upgrade.log"
                     
                 else
-                    echo "System libbpf version $CURRENT_LIBBPF is compatible - no upgrade needed"
+                    echo "libbpf upgrade not needed - system already compatible"
                 fi
             else
-                echo "Non-Ubuntu 22.04 system detected - libbpf upgrade skipped"
+                echo "Non-Ubuntu 22.04/24.04 system detected - libbpf upgrade skipped"
             fi
         else
             echo "Could not determine OS version - libbpf upgrade skipped"

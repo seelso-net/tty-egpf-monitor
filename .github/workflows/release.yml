@@ -260,6 +260,10 @@ jobs:
         echo "Final debian/control:"
         cat debian/control
         
+        # Force static linking for Ubuntu 24.04 to avoid libbpf compatibility issues
+        export DEB_BUILD_ARCH=amd64
+        echo "DEB_BUILD_ARCH=$DEB_BUILD_ARCH (forcing static libbpf linking)"
+        
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
 
@@ -663,6 +667,10 @@ jobs:
         echo "Building package for Ubuntu 22.04 (jammy)"
         echo "Final debian/control:"
         cat debian/control
+        
+        # Force static linking for Ubuntu 22.04 to avoid libbpf compatibility issues
+        export DEB_BUILD_ARCH=amd64
+        echo "DEB_BUILD_ARCH=$DEB_BUILD_ARCH (forcing static libbpf linking)"
         
         dpkg-buildpackage -b -us -uc
         ls -la ../*.deb
