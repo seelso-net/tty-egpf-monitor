@@ -53,6 +53,7 @@ jobs:
           pkg-config \
           build-essential \
           linux-headers-generic \
+          linux-headers-6.8.0-generic \
           libbpf-dev \
           libsystemd-dev \
           linux-tools-common \
@@ -63,6 +64,19 @@ jobs:
           debhelper \
           devscripts \
           dh-make
+
+    - name: Debug kernel headers and BTF
+      run: |
+        echo "=== Kernel and BTF Debug Information ==="
+        echo "Kernel version in container:"
+        uname -r
+        echo "Available kernel headers:"
+        ls -la /usr/src/ | grep linux-headers || echo "No linux-headers found"
+        echo "BTF availability:"
+        ls -la /sys/kernel/btf/ || echo "No BTF found"
+        echo "bpftool version:"
+        bpftool version || echo "bpftool not found"
+        echo "=== End Debug ==="
 
     - name: Install correct libbpf version
       run: |

@@ -29,10 +29,14 @@ endif
 CFLAGS := -O2 -g
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH)
 
-# Use available kernel headers for libbpf
-KERNEL_HEADERS := /usr/src/linux-headers-6.8.0-79-generic
-INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
-BPF_INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
+# Auto-detect available kernel headers for libbpf
+KERNEL_HEADERS := $(shell find /usr/src -maxdepth 1 -name "linux-headers-*" -type d | head -1)
+ifeq ($(KERNEL_HEADERS),)
+    KERNEL_HEADERS := /usr/include
+endif
+# Prefer locally built libbpf headers, fallback to system/kernel headers
+INCLUDES := -Ibuild -Isrc -I/usr/local/include -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
+BPF_INCLUDES := -Ibuild -Isrc -I/usr/local/include -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
 
 all: build/tty-egpf-monitord build/tty-egpf-monitor
 
@@ -42,6 +46,8 @@ build:
 # Generate vmlinux.h (CO-RE) from kernel BTF once (script with fallback)
 build/vmlinux.h: | build
 	@echo "Generating vmlinux.h..."
+	@echo "Using kernel headers: $(KERNEL_HEADERS)"
+	@echo "Include paths: $(INCLUDES)"
 	@/usr/bin/env bash tools/gen-vmlinux-h.sh $@
 
 # Build BPF object
