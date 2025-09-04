@@ -160,21 +160,6 @@ Note: configuration persistence is intentionally disabled. Add ports at runtime 
 
 ## 🔧 Troubleshooting
 
-### Ubuntu 22.04 Specific Issues
-
-If you encounter libbpf-related errors on Ubuntu 22.04:
-
-The daemon will automatically check the libbpf version and fail with a clear error message if an incompatible version is detected. To fix this, install a newer libbpf:
-
-```bash
-sudo apt-get install -y git build-essential libelf-dev zlib1g-dev
-cd /tmp
-git clone --depth 1 https://github.com/libbpf/libbpf.git
-cd libbpf/src
-sudo make install
-sudo ldconfig
-```
-
 ### Common Issues
 
 - **Permission Denied**: Ensure the daemon has the necessary capabilities (`cap_bpf`, `cap_perfmon`, `cap_net_admin`)
