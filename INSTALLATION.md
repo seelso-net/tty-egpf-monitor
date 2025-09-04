@@ -16,7 +16,7 @@ echo "deb [signed-by=/usr/share/keyrings/tty-egpf-monitor.gpg] ${REPO_URL} ${COD
 sudo apt-get update
 ```
 
-2. **Install the packages**:
+2. **Install the packages** (post-install handles Jammy libbpf automatically):
 ```bash
 sudo apt-get install -y tty-egpf-monitord tty-egpf-monitor-cli
 ```
@@ -47,7 +47,7 @@ sudo apt-get install -y build-essential clang make libelf-dev zlib1g-dev pkg-con
     linux-headers-generic libbpf-dev bpftool libsystemd-dev git
 ```
 
-### Build from Source
+### Build from Source (developers)
 
 ```bash
 # Clone the repository

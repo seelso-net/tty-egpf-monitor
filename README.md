@@ -92,13 +92,11 @@ For containerized environments, see the [Docker section in INSTALLATION.md](INST
 - **Signing**: GPG-signed packages for security
 - **Supported**: Ubuntu 22.04 (Jammy) and Ubuntu 24.04 (Noble)
 
-## 🚀 **NEW: Ubuntu 22.04 Compatibility**
+## 🚀 Ubuntu 22.04 (Jammy) Compatibility
 
-**v0.4.61+ includes automatic libbpf compatibility fixes:**
-- ✅ **Ubuntu 22.04 (jammy)**: **Auto-upgrades system libbpf from 0.5.0 to 1.6.2+** during package installation
-- ✅ **Ubuntu 24.04 (noble)**: Uses native libbpf 1.7.0+
-- ✅ **Zero manual intervention** - works out-of-the-box on all supported Ubuntu versions
-- ✅ **Fixes BPF tracepoint attachment** issues that prevented event capture
+- The APT package performs a post-install check on Jammy. If a modern libbpf is not available, it automatically builds and installs a newer libbpf from source, then runs ldconfig.
+- On Ubuntu 24.04 (Noble), the native libbpf is sufficient and no action is taken.
+- This happens transparently during `apt install tty-egpf-monitord`—no manual steps are required.
 
 **Defaults**:
 - Socket: `/run/tty-egpf-monitord.sock`
@@ -149,7 +147,7 @@ Note: configuration persistence is intentionally disabled. Add ports at runtime 
 
 ## API (for reference)
 - `GET /ports` → list: `[ {"idx":0, "dev":"/dev/ttyUSB0"}, ... ]`
-- `POST /ports` with body `{ "dev":"/dev/ttyUSB0", "log":"/custom/path.jsonl" }` → `{ "idx":0 }`
+- `POST /ports` with body `{ "dev":"/dev/ttyUSB0", "log":"/custom/path.jsonl", "baudrate":115200 }` → `{ "idx":0 }`
 - `DELETE /ports/{idx}` → `{ "ok": true }`
 - `DELETE /ports` with body `{ "dev":"/dev/ttyUSB0" }` → `{ "ok": true }`
 - `GET /logs/{idx}` → NDJSON body
