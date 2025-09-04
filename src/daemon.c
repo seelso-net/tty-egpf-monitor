@@ -38,6 +38,8 @@ struct fdkey { uint32_t tgid; int32_t fd; };
 // Must match MAX_DATA in sniffer.bpf.c
 #define MAX_DATA 256
 #define MAX_PATH 256
+// Must match MAX_TARGETS in sniffer.bpf.c
+#define MAX_TARGETS 16
 struct pathval { char path[MAX_PATH]; };
 
 /* Additional structs needed for BPF scratch buffers */
@@ -141,6 +143,9 @@ struct last_event {
 static struct last_event last_events[MAX_PORTS] = {0};
 static int port_baudrates[MAX_PORTS]; // Baudrate for each port
 static uint32_t self_tgid = 0; // Our own process ID to ignore our own opens/closes
+
+// Store both original and resolved paths for symlink support
+static char original_paths[MAX_PORTS][256];  // Store original path (alias)
 
 // Track port state for mode switching (independent of logging decisions)
 static struct {
@@ -783,8 +788,27 @@ static int sync_targets_map(void)
     int td_fd = bpf_map__fd(g_skel->maps.target_dev);
     if (td_fd < 0) return -1;
     
-    for (uint32_t i=0;i<MAX_PORTS;i++) {
+    // Clear all entries first
+    struct pathval empty_path = { .path = "" };
+    uint64_t zero_dev = 0;
+    for (uint32_t i = 0; i < MAX_TARGETS; i++) {
+        bpf_map_update_elem(tp_fd, &i, &empty_path, BPF_ANY);
+        bpf_map_update_elem(td_fd, &i, &zero_dev, BPF_ANY);
+    }
+    
+    for (uint32_t i = 0; i < target_count; i++) {
+        // Store resolved path at index i
         if (bpf_map_update_elem(tp_fd, &i, ports[i], BPF_ANY)) return -1;
+        
+        // Store original path (alias) at index i + MAX_PORTS for symlink matching
+        if (original_paths[i][0] != '\0' && strcmp(original_paths[i], ports[i]) != 0) {
+            uint32_t alias_idx = i + MAX_PORTS;
+            if (alias_idx < MAX_TARGETS) {
+                struct pathval alias_path;
+                snprintf(alias_path.path, sizeof(alias_path.path), "%s", original_paths[i]);
+                bpf_map_update_elem(tp_fd, &alias_idx, &alias_path, BPF_ANY);
+            }
+        }
         
         // Get device major:minor for BPF matching
         if (ports[i][0] != '\0') {
@@ -805,7 +829,9 @@ static int sync_targets_map(void)
     int tc_fd = bpf_map__fd(g_skel->maps.target_count);
     if (tc_fd >= 0) {
         uint32_t k0 = 0;
-        if (bpf_map_update_elem(tc_fd, &k0, &target_count, BPF_ANY)) return -1;
+        // Store actual target_count, BPF will check up to MAX_TARGETS
+        uint32_t effective_count = target_count * 2;  // Include alias entries
+        if (bpf_map_update_elem(tc_fd, &k0, &effective_count, BPF_ANY)) return -1;
     }
     return 0;
 }
@@ -814,9 +840,14 @@ static int api_add_port(const char *devpath, const char *logpath, int baudrate, 
 {
     pthread_mutex_lock(&ports_mu);
     
-    // Check if port already exists
+    // Check if port already exists (check both original and resolved paths)
+    char resolved_path[256];
+    normalize_path(devpath, resolved_path, sizeof(resolved_path));
+    
     for (uint32_t i = 0; i < target_count; i++) {
-        if (ports[i][0] != '\0' && strcmp(ports[i], devpath) == 0) {
+        if (ports[i][0] != '\0' && 
+            (strcmp(ports[i], devpath) == 0 || strcmp(ports[i], resolved_path) == 0 ||
+             strcmp(original_paths[i], devpath) == 0)) {
             snprintf(err, errsz, "port %s already exists", devpath);
             pthread_mutex_unlock(&ports_mu);
             return -1;
@@ -825,7 +856,11 @@ static int api_add_port(const char *devpath, const char *logpath, int baudrate, 
     
     uint32_t idx = target_count;
     if (idx >= MAX_PORTS) { snprintf(err, errsz, "max ports reached"); pthread_mutex_unlock(&ports_mu); return -1; }
-    normalize_path(devpath, ports[idx], sizeof(ports[idx]));
+    
+    // Store original path for user reference
+    snprintf(original_paths[idx], sizeof(original_paths[idx]), "%s", devpath);
+    // Store resolved path for BPF matching and active mode operations
+    snprintf(ports[idx], sizeof(ports[idx]), "%s", resolved_path);
     
     // Store baudrate for this port
     port_baudrates[idx] = baudrate;

@@ -233,6 +233,10 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
+            // If this is an alias match (index >= MAX_TARGETS/2), map back to real port index
+            if (midx >= MAX_TARGETS/2) {
+                midx = midx - MAX_TARGETS/2;
+            }
             bpf_printk("open-enter raw: tgid=%u match idx=%u\n", tgid, midx);
             bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
             if (dv_enter) { dv_enter->enter_matches += 1; dv_enter->last_tgid = tgid; dv_enter->last_idx = midx; }
@@ -456,6 +460,10 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
             }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
+            // If this is an alias match (index >= MAX_TARGETS/2), map back to real port index
+            if (midx >= MAX_TARGETS/2) {
+                midx = midx - MAX_TARGETS/2;
+            }
         bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
@@ -492,6 +500,10 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
+            // If this is an alias match (index >= MAX_TARGETS/2), map back to real port index
+            if (midx >= MAX_TARGETS/2) {
+                midx = midx - MAX_TARGETS/2;
+            }
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
     }
     return 0;
