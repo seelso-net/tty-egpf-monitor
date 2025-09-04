@@ -103,7 +103,7 @@ jobs:
     
     - name: Publish to TestPyPI (if token available)
       uses: pypa/gh-action-pypi-publish@release/v1
-      if: secrets.TEST_PYPI_API_TOKEN != ''
+      continue-on-error: true
       with:
         repository-url: https://test.pypi.org/legacy/
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
@@ -124,17 +124,16 @@ jobs:
     
     - name: Publish to PyPI (if token available)
       uses: pypa/gh-action-pypi-publish@release/v1
-      if: secrets.PYPI_API_TOKEN != ''
+      continue-on-error: true
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
         packages-dir: dist/
         skip-existing: true
         
-    - name: PyPI publishing skipped
-      if: secrets.PYPI_API_TOKEN == ''
+    - name: PyPI publishing info
       run: |
-        echo "PyPI publishing skipped - no API token configured"
-        echo "To enable PyPI publishing:"
+        echo "PyPI publishing attempted"
+        echo "If publishing failed, ensure API tokens are configured:"
         echo "1. Create API token at https://pypi.org/manage/account/token/"
         echo "2. Add token as PYPI_API_TOKEN secret in repository settings"
         echo "3. Set ENABLE_PYPI_PUBLISHING variable to 'true' in repository settings"
