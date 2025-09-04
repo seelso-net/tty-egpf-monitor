@@ -716,6 +716,18 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
         return 0;
     }
 
+    /* Drop READ unless fd was opened writable and OPEN was emitted */
+    __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
+    if (!was_wr) {
+        bpf_map_delete_elem(&rd_ctx, &tgid);
+        return 0;
+    }
+    __u8 *emitted = bpf_map_lookup_elem(&fd_open_emitted, &k);
+    if (!emitted) {
+        bpf_map_delete_elem(&rd_ctx, &tgid);
+        return 0;
+    }
+
     /* Do NOT emit OPEN from READ path */
 
     /* For reliability across kernels/verifier, do not copy DEV->APP payload here */
