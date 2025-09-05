@@ -802,6 +802,16 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           cd -
         }
+        
+        # Clean up Jekyll-related files and ensure .nojekyll exists
+        cd /tmp/apt-repo
+        echo "Cleaning up Jekyll files to prevent processing errors..."
+        rm -f _config.yml Gemfile Gemfile.lock
+        rm -rf _site _layouts _includes _sass assets/css docs
+        # Create .nojekyll early to disable Jekyll processing completely
+        touch .nojekyll
+        git add .nojekyll || true
+        cd -
 
         # Create separate pool directories for each distribution
         mkdir -p /tmp/apt-repo/pool/noble
@@ -847,9 +857,7 @@ jobs:
 
         cd /tmp/apt-repo
         
-        # Create .nojekyll to disable Jekyll processing and avoid SCSS errors
-        touch .nojekyll
-        
+        # .nojekyll should already be created and committed earlier
         # Don't copy index.html from main branch - let GitHub Pages use the existing one
         # The gh-pages branch should already have the nice index.html
         
@@ -914,7 +922,7 @@ jobs:
 
         echo "DEBUG: Adding files to git..."
         # Only add specific files, don't overwrite existing index.html
-        git add .nojekyll
+        # .nojekyll was already added earlier
         git add public-apt-key.asc public-apt-key.gpg || true
         git add dists/ pool/
         # Release files are inside dists/ subdirectories, not at root
