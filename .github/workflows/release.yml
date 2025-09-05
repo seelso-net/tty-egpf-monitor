@@ -846,9 +846,12 @@ jobs:
         done
 
         cd /tmp/apt-repo
+        
+        # Create .nojekyll to disable Jekyll processing and avoid SCSS errors
         touch .nojekyll
-        # Copy index.html for better repository presentation
-        cp "$GITHUB_WORKSPACE/index.html" ./index.html || true
+        
+        # Don't copy index.html from main branch - let GitHub Pages use the existing one
+        # The gh-pages branch should already have the nice index.html
         
         # Publish public key at root for clients
         KEYASC=""
@@ -910,7 +913,11 @@ jobs:
         echo '</ul><p><a href="../">← Back</a></p></body></html>' >> pool/noble/index.html
 
         echo "DEBUG: Adding files to git..."
-        git add -A
+        # Only add specific files, don't overwrite existing index.html
+        git add .nojekyll
+        git add public-apt-key.asc public-apt-key.gpg || true
+        git add dists/ pool/ 
+        git add Release Release.gpg
         echo "DEBUG: Committing changes..."
         git commit -m "Update apt repo for ${GITHUB_REF}" || git commit -m "Initialize apt repo"
         echo "DEBUG: Pushing to gh-pages branch..."
