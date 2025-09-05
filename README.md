@@ -215,3 +215,4 @@ Note: configuration persistence is intentionally disabled. Add ports at runtime 
 
 ## License
 GPL-3.0. See LICENSE.
+# Test trigger
