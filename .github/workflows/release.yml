@@ -916,8 +916,10 @@ jobs:
         # Only add specific files, don't overwrite existing index.html
         git add .nojekyll
         git add public-apt-key.asc public-apt-key.gpg || true
-        git add dists/ pool/ 
-        git add Release Release.gpg
+        git add dists/ pool/
+        # Release files are inside dists/ subdirectories, not at root
+        echo "Files to be committed:"
+        git status --porcelain
         echo "DEBUG: Committing changes..."
         git commit -m "Update apt repo for ${GITHUB_REF}" || git commit -m "Initialize apt repo"
         echo "DEBUG: Pushing to gh-pages branch..."
