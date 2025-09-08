@@ -63,9 +63,9 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 
 ifdef DEB_BUILD_ARCH
   # For Debian builds, use static linking to avoid dpkg-shlibdeps issues with custom libbpf
-  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
   LIBBPF_CFLAGS := -I/usr/local/include
-  LIBBPF_LDFLAGS := -L/usr/local/lib
+  LIBBPF_LDFLAGS := -L/usr/local/lib64
 else ifeq ($(STATIC_BPF),1)
   LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
