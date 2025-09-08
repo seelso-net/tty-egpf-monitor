@@ -833,6 +833,8 @@ jobs:
         touch .nojekyll
         # Copy index.html for better repository presentation
         cp "$GITHUB_WORKSPACE/index.html" ./index.html || true
+        # Copy install.sh script for easy installation
+        cp "$GITHUB_WORKSPACE/install.sh" ./install.sh || true
         
         # Publish public key at root for clients
         KEYASC=""
