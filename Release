@@ -1,38 +1,38 @@
 Architectures: amd64
 Codename: stable
 Components: main
-Date: Mon, 08 Sep 2025 19:49:06 +0000
+Date: Mon, 08 Sep 2025 21:49:57 +0000
 Label: tty-egpf-monitor
 Suite: stable
 MD5Sum:
- 00a32f687f1ce5b55b447dc932b694a3              131 Release
- 81fa7e119bf32e576bc82d8de9105c3f             1439 dists/jammy/Release
- 00544cbc82a5ba35472b46ef7a5dca07            98916 dists/jammy/main/binary-amd64/Packages
- 62d5250ce4b55d6ec0eb99f5b2eaff24            18501 dists/jammy/main/binary-amd64/Packages.gz
- 1578121e88df3314e24dffbac0c0a68f             1439 dists/noble/Release
- 11cc4a9d28e11753777ccab0bbc99a87            99012 dists/noble/main/binary-amd64/Packages
- 977bfa66dc67cfee6db98310fc7211e0            18489 dists/noble/main/binary-amd64/Packages.gz
+ ebe20f3f05a36a88a40a6b2c8b06ac8c              131 Release
+ 75cfb63930825c01daa99433c8667f80             1439 dists/jammy/Release
+ 6986a46f081a3fb127635742a1ceab3b           100974 dists/jammy/main/binary-amd64/Packages
+ 60915e3e74eaf6c076ea2a2264c9906e            18855 dists/jammy/main/binary-amd64/Packages.gz
+ fa5c5d0768c0c02c1d202baa8a1523d1             1439 dists/noble/Release
+ 94765050a20fbdd7d98562abba4eb5c3           101072 dists/noble/main/binary-amd64/Packages
+ cd81a2593449e2750e15b595ac04ce70            18852 dists/noble/main/binary-amd64/Packages.gz
 SHA1:
- e6a9a9350386d10168cbfe3e13b96578d7ac3f63              131 Release
- c9681e363770435a01d3cf76c46eb213b91d813a             1439 dists/jammy/Release
- 61ce2b9364b84b1364f4bb587f984d7143f62848            98916 dists/jammy/main/binary-amd64/Packages
- a3757d167ebb0f411d403d027ef1052ddbefab90            18501 dists/jammy/main/binary-amd64/Packages.gz
- 31eb8bf0078410f05aaebddbde8bcebb5feeb201             1439 dists/noble/Release
- 84c7e3377996e95cbb123bb218245bdd3afb41ee            99012 dists/noble/main/binary-amd64/Packages
- f3f26118aeb6f2c3e921f179c4e530b4633ca8b2            18489 dists/noble/main/binary-amd64/Packages.gz
+ 76f122799fe1961d01b64969418edc63315a8191              131 Release
+ 83a7cd1d7f66309d6df46b6a0984f6e6d6fbc7f5             1439 dists/jammy/Release
+ ade445f7f3cc544de1536e07eb51a4d1d082715d           100974 dists/jammy/main/binary-amd64/Packages
+ 9f97063406fa8a920aeae2acc301114c6177769a            18855 dists/jammy/main/binary-amd64/Packages.gz
+ 34745c8b6adc185c99457e08d18e33c1c9f322ef             1439 dists/noble/Release
+ cceba678b9a425a5c64c1b0f8defaf4c4c365b28           101072 dists/noble/main/binary-amd64/Packages
+ c1b8a1e0012b4bcd9089363efe6511e4da50ac8d            18852 dists/noble/main/binary-amd64/Packages.gz
 SHA256:
- 5b21c0d6a7cf8212bd1545501a6d62809fb6d87e80117788f22b2f675e0723e5              131 Release
- c9496c9d70c4da55dbf185a65444fbc2a6cae818d2129ffdec76701cb5375411             1439 dists/jammy/Release
- 2e10c5d9f959afee97eec7f3d7036be7d3501db47321742caa607a4ebfc82562            98916 dists/jammy/main/binary-amd64/Packages
- 6c9b18e37617c66dbbdeb0e891251519139f6dd0ee700d5c83c01ffd98677f1d            18501 dists/jammy/main/binary-amd64/Packages.gz
- e12fbbe75514fb06bc016a9c6bad31f6cd5ad145cad61810cf44b3feb8ce1410             1439 dists/noble/Release
- 19ebcecb85258e81534034f23be88ca10e56c15d6f0d1d5ed6116c0192dbb08e            99012 dists/noble/main/binary-amd64/Packages
- 3155237f58033f01ad46a8023a1e42cd921f56d5921185852b3cd6f166c2dc50            18489 dists/noble/main/binary-amd64/Packages.gz
+ daa88c3b77066d93184999d2ecfbfe7cd87a28ae19ea8ccf66df7bd63a96dce8              131 Release
+ 75099671aa144747b3982f915369c78aa5a9f5188461c934c4ec908a8737bb95             1439 dists/jammy/Release
+ e59766dad66d0ced0adbbb93c7180dc5af1958db4f811feb487e6387a878d153           100974 dists/jammy/main/binary-amd64/Packages
+ 319190ac7124975d9dfbdbfb54133d30847a558e33608440ed04067342e245d8            18855 dists/jammy/main/binary-amd64/Packages.gz
+ fb3f86b37c3ffd8c8dc9fb0a0fd7b262936aab7497e9fa70e2152d4565f21759             1439 dists/noble/Release
+ 7b85aa2321056a9420e33fd3bcb947f31ba1acb6781ea25b6810bc5bfbd59265           101072 dists/noble/main/binary-amd64/Packages
+ 528f1c4daaa1bb9a01f2081aa83cd937157d73bb2b5974b00117e803815e583b            18852 dists/noble/main/binary-amd64/Packages.gz
 SHA512:
- 7e6daa5289dbb8a3e1c84db0b66d7a3295a24c5466f9210419dbca024a4e72c6922ed5da26502226c29d35a91dfbc1c4c33e734050dab5b2d10ba12eadcc5fac              131 Release
- a41da4b39e58f3d3be3bf2b11c517a531f3e580596d3bfb671734c4ab8ed7491bec1a82e9e6fd42d5217c6bd0a1a584e78e1526f18fe5cc639c135b4aa635062             1439 dists/jammy/Release
- aa3a78de2405cc52409271e3608ab16a7659922e81544c12ad8abebc4f8279b0c1b467314963d3703c6491c1ec86159aeb4d7fa662164faf0a8f94b575f3429e            98916 dists/jammy/main/binary-amd64/Packages
- d2fa2151c9721c0cc2950a3d0e99931f856692e15a3ab39ce51a49fd045f3b850e7a52e1efc03cd00fe7c0734a2e709f8f914453a0ca2be3df6e711c1be354ef            18501 dists/jammy/main/binary-amd64/Packages.gz
- 6bf8a887a8f72acf3c002063298e8554ea7339d5194a67fc6af72c1c94992b7454bbaeb23988407acac69fb6c9822d700c650c52403a259b0a413001d50512ae             1439 dists/noble/Release
- 8507cf4b4fae99879b43a17d66f68fc04a08a20c2b2bc01dfa4794a59e30c2e02c81463918b7402d4322801d56ffad25a8738d38b490c2f0dce32e6a2fb453be            99012 dists/noble/main/binary-amd64/Packages
- e5e3e5f6704548cfe883eaf51d118c123d07fd1276fb9f5578ffa2ca30e15ec90a66633cf2dbad2ef4a8e1a29ea0dbecc6e90da2272c7421034409c521c2000d            18489 dists/noble/main/binary-amd64/Packages.gz
+ d838c96bd831fd49bc7338327fc0c55857402f03c762b4365b153ee06bc624f2e4980b364d2dac12b92ada3e51b1b0026ef9fcce4294fe9635da2aa65564b92a              131 Release
+ ae05457c1c845a8ff154da2fa9cb61c0eb5c982c8fb15adcd0a37e0bc2cba45ee141e9152bcc0bb451c09787007d5207700a364bce7f72157009de7ce6c7d33b             1439 dists/jammy/Release
+ 6bdb546182f93d29edb56f74c76120c22bda806f3d588dcc2fa0cfbb587a53ee3e5497236d7c99b1ad67f544c623fa0d3acfa4cb41289133e23afc87bf9aa4cb           100974 dists/jammy/main/binary-amd64/Packages
+ 39083551255692b1de9ce1514bf8300387c9a986d1a66ecf8e552e61db889e7044b38f50de21157f4dc9a3bfe1896c4276f9584f69e23a359ba721cc0d267118            18855 dists/jammy/main/binary-amd64/Packages.gz
+ 6121109adc9bda2d98ab9df7fe1b51c19bce1c64cb7b2edea0fd0cf233a3ad811313318442cf75c0206b626576168abe4db4b94a2fa7772fcf2af80890d0c7bc             1439 dists/noble/Release
+ f0488e2a1723f4001acfa308cf0867b9cb3411c50ecc3b063b2000c16e2ad4f1a5da4570a1e3630fac1ee15f361520cd312c4c1ae585cc7e6187607930695087           101072 dists/noble/main/binary-amd64/Packages
+ b7e2bc0f7871fb878492e636b4e7a4c7360f74d5819d07939420b1a5c2ad1e9ed09714d192fccf89b0541f6d571f1b2852fdc92e705e85dfef181f38e08f20ae            18852 dists/noble/main/binary-amd64/Packages.gz
