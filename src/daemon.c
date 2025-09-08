@@ -115,6 +115,7 @@ static void on_sig(int s){ (void)s; stop_flag = 1; }
 struct ring_buffer *g_rb;
 struct sniffer_bpf *g_skel;
 struct bpf_object *g_obj;
+static int g_use_simplified_ebpf = 0;  // Flag to indicate if we're using simplified eBPF program
 
 static pthread_mutex_t ports_mu = PTHREAD_MUTEX_INITIALIZER;
 static char ports[MAX_PORTS][256];
@@ -1592,28 +1593,31 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR: tp_raw_sys_exit program NOT attached to tracepoint\n");
     }
     
+    // Check if we're using the simplified eBPF program (Ubuntu 24.04)
     if (g_skel->links.tp_enter_openat_tp) {
         fprintf(stderr, "tp_enter_openat_tp program attached to tracepoint\n");
+        g_use_simplified_ebpf = 0;
     } else {
-        fprintf(stderr, "ERROR: tp_enter_openat_tp program NOT attached to tracepoint\n");
+        fprintf(stderr, "Individual tracepoints not available (using simplified eBPF program)\n");
+        g_use_simplified_ebpf = 1;
     }
     
     if (g_skel->links.tp_enter_openat2_tp) {
         fprintf(stderr, "tp_enter_openat2_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_enter_openat2_tp program NOT attached to tracepoint\n");
+        fprintf(stderr, "Individual tracepoints not available (using simplified eBPF program)\n");
     }
     
     if (g_skel->links.tp_exit_openat_tp) {
         fprintf(stderr, "tp_exit_openat_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_exit_openat_tp program NOT attached to tracepoint\n");
+        fprintf(stderr, "Individual tracepoints not available (using simplified eBPF program)\n");
     }
     
     if (g_skel->links.tp_exit_openat2_tp) {
         fprintf(stderr, "tp_exit_openat2_tp program attached to tracepoint\n");
     } else {
-        fprintf(stderr, "ERROR: tp_exit_openat2_tp program NOT attached to tracepoint\n");
+        fprintf(stderr, "Individual tracepoints not available (using simplified eBPF program)\n");
     }
     
     if (g_skel->links.tp_enter_close) {
