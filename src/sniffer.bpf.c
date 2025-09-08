@@ -207,44 +207,9 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        /* Capture filename and try to match now; store matched index for exit */
+        /* Just capture flags to determine writability - path matching is done in individual tracepoints */
         __u32 dkey = 0; struct dbg_open_vals *dv_enter = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv_enter) dv_enter->enter_seen_raw += 1;
-        const char *filename = NULL;
-    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
-        __u32 k0 = 0;
-        struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
-        if (!sg)
-            return 0;
-        int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
-        if (glen <= 0) {
-            if (dv_enter) dv_enter->read_fail += 1;
-            return 0;
-        }
-
-        __s32 matched_idx = -1;
-#pragma unroll
-        for (int i = 0; i < MAX_TARGETS; i++) {
-            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-            if (!sw) break;
-            __u32 ki = i;
-            struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-            if (!tpv) continue;
-            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-            if (sw->path[0] == '\0') continue;
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-        }
-        if (matched_idx >= 0) {
-            __u32 midx = (unsigned)matched_idx;
-            // If this is an alias match (index >= MAX_TARGETS/2), map back to real port index
-            if (midx >= MAX_TARGETS/2) {
-                midx = midx - MAX_TARGETS/2;
-            }
-            bpf_printk("open-enter raw: tgid=%u match idx=%u\n", tgid, midx);
-            bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
-            if (dv_enter) { dv_enter->enter_matches += 1; dv_enter->last_tgid = tgid; dv_enter->last_idx = midx; }
-        }
-        else if (dv_enter) { dv_enter->no_match += 1; }
         /* Also capture flags to determine writability */
         if (id == __NR_openat) {
             int flags = 0; bpf_probe_read_kernel(&flags, sizeof(flags), &ctx->args[2]);
@@ -385,31 +350,9 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        if (ret >= 0) {
-            __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
-            if (dv2) dv2->exit_seen_raw += 1;
-
-            /* If path match was recorded, map fd AND emit OPEN event */
-            __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
-            if (idxp) {
-                __u32 midx = *idxp;
-                struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1;
-                bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
-                bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-                if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
-                
-                /* Emit OPEN event for successful opens */
-                struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-                if (o) { 
-                    fill_common(o, EV_OPEN); 
-                    o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; 
-                    o->data_len=0; o->data_trunc=0; 
-                    bpf_ringbuf_submit(o, 0); 
-                }
-                
-                bpf_map_delete_elem(&pending_open_idx, &tgid);
-            }
-        }
+        /* Path matching and fd mapping is handled by individual tracepoints */
+        __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
+        if (dv2) dv2->exit_seen_raw += 1;
         return 0;
     }
 
