@@ -1,8 +1,8 @@
 name: Release
 
 # IMPORTANT: This workflow now builds packages compatible with both kernel 5.15.x and 6.8.x
-# by using HWE kernel headers (linux-headers-generic-hwe-22.04 and linux-headers-generic-hwe-24.04) 
-# instead of generic headers. This ensures packages work on Ubuntu machines running newer kernels.
+# by using HWE kernel headers (linux-headers-generic-hwe-22.04) instead of generic headers.
+# This ensures packages work on Ubuntu 22.04 machines running newer kernels.
 
 on:
   push:
@@ -52,7 +52,7 @@ jobs:
           zlib1g-dev \
           pkg-config \
           build-essential \
-          linux-headers-generic-hwe-24.04 \
+          linux-headers-generic \
           libbpf-dev \
           libsystemd-dev \
           linux-tools-common \
