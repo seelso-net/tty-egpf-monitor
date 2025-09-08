@@ -44,6 +44,9 @@ typedef long long          __s64;
 #ifndef __NR_writev
 #define __NR_writev 20
 #endif
+#ifndef __NR_close
+#define __NR_close 3
+#endif
 
 /* Minimal O_* flags used to detect writable opens */
 #ifndef O_RDONLY
@@ -361,6 +364,15 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         return 0;
     }
 
+    if (id == __NR_close) {
+        __s32 fd;
+        bpf_probe_read_kernel(&fd, sizeof(fd), &ctx->args[0]);
+        /* Store fd for close exit handler */
+        struct close_ctx cc = { .fd = fd };
+        bpf_map_update_elem(&cl_ctx, &tgid, &cc, BPF_ANY);
+        return 0;
+    }
+
     return 0;
 }
 
@@ -377,7 +389,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
             __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
             if (dv2) dv2->exit_seen_raw += 1;
 
-            /* If path match was recorded, only map fd; do NOT emit OPEN here */
+            /* If path match was recorded, map fd AND emit OPEN event */
             __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
             if (idxp) {
                 __u32 midx = *idxp;
@@ -385,9 +397,49 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
+                
+                /* Emit OPEN event for successful opens */
+                struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+                if (o) { 
+                    fill_common(o, EV_OPEN); 
+                    o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; 
+                    o->data_len=0; o->data_trunc=0; 
+                    bpf_ringbuf_submit(o, 0); 
+                }
+                
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         }
+        return 0;
+    }
+
+    if (id == __NR_close) {
+        struct close_ctx *cc = bpf_map_lookup_elem(&cl_ctx, &tgid);
+        if (!cc) return 0;
+        __s32 fd = cc->fd;
+        if (ret == 0) {  // close was successful
+            struct fdkey k = { .tgid = tgid, .fd = fd };
+            __u32 *idxp = bpf_map_lookup_elem(&fd_portidx, &k);
+            if (idxp) {
+                __u32 midx = *idxp;
+                /* Emit CLOSE event for successful closes */
+                struct event *c = bpf_ringbuf_reserve(&events, sizeof(*c), 0);
+                if (c) { 
+                    fill_common(c, EV_CLOSE); 
+                    c->cmd=0; c->ret=ret; c->dir=0; c->port_idx=midx; 
+                    c->data_len=0; c->data_trunc=0; 
+                    bpf_ringbuf_submit(c, 0); 
+                }
+                /* Clean up fd mappings */
+                bpf_map_delete_elem(&fd_portidx, &k);
+                bpf_map_delete_elem(&fd_interest, &k);
+                bpf_map_delete_elem(&fd_open_emitted, &k);
+                bpf_map_delete_elem(&fd_is_writable, &k);
+                bpf_map_delete_elem(&fd_has_tty_ioctl, &k);
+            }
+        }
+        /* Clean up close context */
+        bpf_map_delete_elem(&cl_ctx, &tgid);
         return 0;
     }
 
