@@ -1,3 +1,11 @@
+tty-egpf-monitor (0.6.1-1) unstable; urgency=medium
+
+  * Fix Ubuntu 24.04 logging: add missing syscall definitions (openat2, readv, writev)
+  * Improve install.sh: ensure gnupg is installed and use gpg --dearmor consistently
+  * Update APT repository instructions to use proper GPG key handling
+
+ -- Adrian <adrian@example.com>  Mon, 08 Sep 2025 16:15:51 +0200
+
 tty-egpf-monitor (0.4.45-1) unstable; urgency=medium
 
   * fix(bpf): initialize scratch buffers at load time
