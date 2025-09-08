@@ -63,17 +63,17 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 
 ifdef DEB_BUILD_ARCH
   # For Debian builds, use static linking to avoid dpkg-shlibdeps issues with custom libbpf
-  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
   LIBBPF_CFLAGS := -I/usr/local/include
-  LIBBPF_LDFLAGS := -L/usr/local/lib64
+  LIBBPF_LDFLAGS := -L/usr/local/lib
 else ifeq ($(STATIC_BPF),1)
-  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  LIBBPF_LIBS := -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
-  LIBBPF_LIBS := -L/usr/local/lib64 -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib64 -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+  LIBBPF_LIBS := -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
 endif
 
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build
-	$(CC) $(CFLAGS) $(INCLUDES) src/daemon.c -o $@ $(LIBBPF_LIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) $(LIBBPF_CFLAGS) src/daemon.c -o $@ $(LIBBPF_LIBS) $(LIBBPF_LDFLAGS)
 
 build/tty-egpf-monitor: src/cli.c | build
 	$(CC) $(CFLAGS) $(INCLUDES) src/cli.c -o $@ -lpthread
