@@ -72,21 +72,25 @@ KEY_URL="${REPO_URL}/public-apt-key.asc"
 REPO_FILE="/etc/apt/sources.list.d/tty-egpf-monitor.list"
 KEY_FILE="/usr/share/keyrings/tty-egpf-monitor.gpg"
 
-# Download and install the repository key
+# Ensure gnupg is available and dearmor ASCII key into keyrings path
 print_status "Adding repository key..."
-if command -v gpg &> /dev/null; then
-    if ! curl -fsSL "$KEY_URL" | sudo gpg --dearmor -o "$KEY_FILE"; then
-        print_error "Failed to download repository key from $KEY_URL"
+if ! command -v gpg &> /dev/null; then
+    print_status "Installing gnupg for key handling..."
+    if ! sudo apt-get update; then
+        print_error "Failed to update package list before installing gnupg"
         exit 1
     fi
-else
-    # Fallback: download directly if gpg is not available
-    if ! sudo curl -fsSL "$KEY_URL" -o "$KEY_FILE"; then
-        print_error "Failed to download repository key from $KEY_URL"
+    if ! sudo apt-get install -y gnupg; then
+        print_error "Failed to install gnupg"
         exit 1
     fi
-    sudo chmod 644 "$KEY_FILE"
 fi
+
+if ! curl -fsSL "$KEY_URL" | sudo gpg --dearmor -o "$KEY_FILE"; then
+    print_error "Failed to download or dearmor repository key from $KEY_URL"
+    exit 1
+fi
+sudo chmod 644 "$KEY_FILE"
 
 # Add the repository
 print_status "Adding APT repository..."

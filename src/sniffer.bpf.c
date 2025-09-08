@@ -248,9 +248,19 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
             __u8 wr = ((flags & O_WRONLY) || (flags & O_RDWR)) ? 1 : 0;
             bpf_map_update_elem(&pending_open_writable, &tgid, &wr, BPF_ANY);
         } else {
-            /* openat2: struct open_how* at arg2 -> read .flags
-               For simplicity on older kernels, assume read-only if we cannot parse */
-            __u8 wr0 = 0; bpf_map_update_elem(&pending_open_writable, &tgid, &wr0, BPF_ANY);
+            /* openat2: arg2 is struct open_how* in userspace; read flags to determine writability */
+            struct __open_how { __u64 flags; __u64 mode; __u64 resolve; } how = {};
+            const void *howp = NULL;
+            bpf_probe_read_kernel(&howp, sizeof(howp), &ctx->args[2]);
+            __u8 wr2 = 0;
+            if (howp && bpf_probe_read_user(&how, sizeof(how), howp) == 0) {
+                __u64 f = how.flags;
+                wr2 = ((f & O_WRONLY) || (f & O_RDWR)) ? 1 : 0;
+            } else {
+                /* Fallback if parsing fails: assume not writable */
+                wr2 = 0;
+            }
+            bpf_map_update_elem(&pending_open_writable, &tgid, &wr2, BPF_ANY);
         }
         return 0;
     }
