@@ -16,7 +16,7 @@ override_dh_auto_install:
 	mkdir -p debian/tty-egpf-monitord/var/log/tty-egpf-monitor
 
 override_dh_auto_build:
-	dh_auto_build
+	DEB_BUILD_ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH) dh_auto_build
 
 override_dh_auto_clean:
 	# Clean build artifacts
