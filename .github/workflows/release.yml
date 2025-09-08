@@ -820,7 +820,16 @@ jobs:
           cd -
         done
 
+        # Create root Release file for APT repository
         cd /tmp/apt-repo
+        apt-ftparchive \
+          -o APT::FTPArchive::Release::Label="tty-egpf-monitor" \
+          -o APT::FTPArchive::Release::Suite="stable" \
+          -o APT::FTPArchive::Release::Codename="stable" \
+          -o APT::FTPArchive::Release::Architectures="amd64" \
+          -o APT::FTPArchive::Release::Components="main" \
+          release . > Release
+        
         touch .nojekyll
         # Copy index.html for better repository presentation
         cp "$GITHUB_WORKSPACE/index.html" ./index.html || true
