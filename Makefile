@@ -44,15 +44,9 @@ build/vmlinux.h: | build
 	@echo "Generating vmlinux.h..."
 	@/usr/bin/env bash tools/gen-vmlinux-h.sh $@
 
-# Build BPF object - use simplified version for Ubuntu 24.04 (kernel 6.14+)
-build/sniffer.bpf.o: build/vmlinux.h | build
-	@if [ -f /etc/os-release ] && grep -q "VERSION_ID=\"24.04\"" /etc/os-release; then \
-		echo "Ubuntu 24.04 detected - using simplified eBPF program"; \
-		$(BPF_CLANG) $(BPF_CFLAGS) $(BPF_INCLUDES) -c src/sniffer_simple.bpf.c -o $@; \
-	else \
-		echo "Using standard eBPF program"; \
-		$(BPF_CLANG) $(BPF_CFLAGS) $(BPF_INCLUDES) -c src/sniffer.bpf.c -o $@; \
-	fi
+# Build BPF object
+build/sniffer.bpf.o: src/sniffer.bpf.c build/vmlinux.h | build
+	$(BPF_CLANG) $(BPF_CFLAGS) $(BPF_INCLUDES) -c $< -o $@
 
 # Generate libbpf skeleton header
 build/sniffer.skel.h: build/sniffer.bpf.o | build
