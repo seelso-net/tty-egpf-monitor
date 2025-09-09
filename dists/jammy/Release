@@ -1,22 +1,22 @@
 Architectures: amd64
 Codename: jammy
 Components: main
-Date: Tue, 09 Sep 2025 15:50:44 +0000
+Date: Tue, 09 Sep 2025 15:56:56 +0000
 Label: tty-egpf-monitor
 Suite: jammy
 MD5Sum:
- 284893156dc4c9228c9de36299c8fd26              129 Release
- 90fe0dd483682a30f7cc47ff72fe7012           125703 main/binary-amd64/Packages
- 7ca0d19b961d3d9b93da049176279476            23269 main/binary-amd64/Packages.gz
+ 3544c63a62655114982ea402010d7514              129 Release
+ 12298bbbff8ce149fdb012b37d5c2d07           127764 main/binary-amd64/Packages
+ 483eecff882f2beac5e533477d891f4c            23633 main/binary-amd64/Packages.gz
 SHA1:
- 86b3b53e1d2bc38b931b55f522cb900da575c5d3              129 Release
- c127ac2d5a05b76b26d31ee77e04a0be2022fb71           125703 main/binary-amd64/Packages
- 1cedc84cbfa76ec08b7b5b051c018b1bb56ec11c            23269 main/binary-amd64/Packages.gz
+ 0c51ee43cfda40fab410da21d64c38dc6a9df0bb              129 Release
+ 0a787bce0d88b61cbfb1ac76bb668cecdad16f52           127764 main/binary-amd64/Packages
+ c30cc4045340b20dc5016974c1fd47cfc52db825            23633 main/binary-amd64/Packages.gz
 SHA256:
- 8ae4b9ffabfca72777e07f609e9f7f0066b309cf42f661aef7315d9ff03d18fb              129 Release
- 11a7cb13388594cf875e532c14524e78844813be89d582c4cbe3cc2d7188028d           125703 main/binary-amd64/Packages
- f213d02b312014704b30dda38d455cb8807995e664592241ba5cf7d6619d1e91            23269 main/binary-amd64/Packages.gz
+ f9b47bb25d3a1355b272c89d1681a7b3dabf4c755871c1c55f17f3a529ff7335              129 Release
+ 4da9262e9bd243908654c903e1afdbb1c2ef860d30c0d4b46ef693cc7353e415           127764 main/binary-amd64/Packages
+ 78a729f07bb490406aa276e426ec8ee1cc278e5b8af51b1e38bc6295349fdd1d            23633 main/binary-amd64/Packages.gz
 SHA512:
- 37d84e63ba02ce8070d0acd6631522757edbcff819e1b00f607983d03a8df892ae4202864253a2463a816fc94bd56ce72b1235bfbb0b44dbe2fcb6fa9c253cbc              129 Release
- aee1cec80557b77fec0fcaba7aebae0009272c1081c42c8b5edb761e949117f6a3172cfd59798de58391bd94c170c13f7a5f2b52120d9d05c2912e3d8031549f           125703 main/binary-amd64/Packages
- 9c01e55d595eda33a79d98fb8bc2168a66b12335186f62280689b99fdeddae70fd2c2fd059e6f919f766529f5d11e1ad92fb5545765aa1c2b5a2ccbc60039ee5            23269 main/binary-amd64/Packages.gz
+ 8b86fef9a61c6ab1fc6d5f863c4ed3bdf14d96f8fe272e17e7d84219f04e7b08e3a1816ca1eff1b179d1e2b55236b48f9065fdea4ee044250905fd113d21c679              129 Release
+ 8e58080109ab6d8af145eecccad3fbf08efbb28d19548a0595b79a0b8e077aec66b7943dcc1914aea704ee491b67d5f776d3e9202d4276dc9c2724432107508c           127764 main/binary-amd64/Packages
+ 16de5cffb8c5d398715b9ef5499489c145997b6819554e7a2e31795b87d93541d414f1f462891eb0be263b09b4a3300efb92577c8e6ab971442b679904c28c71            23633 main/binary-amd64/Packages.gz
