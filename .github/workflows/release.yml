@@ -85,7 +85,7 @@ jobs:
         rm -f /usr/local/lib/pkgconfig/libbpf.pc /usr/local/lib64/pkgconfig/libbpf.pc 2>/dev/null || true
         
         # Install with explicit paths to ensure proper installation
-        make install PREFIX=/usr/local
+        make install PREFIX=/usr/local LIBDIR=/usr/local/lib64
         ldconfig
         
         # Verify what was actually installed
@@ -353,7 +353,7 @@ jobs:
         rm -f /usr/local/lib/pkgconfig/libbpf.pc /usr/local/lib64/pkgconfig/libbpf.pc 2>/dev/null || true
         
         # Install with explicit paths to ensure proper installation
-        make install PREFIX=/usr/local
+        make install PREFIX=/usr/local LIBDIR=/usr/local/lib64
         ldconfig
         
         # Verify what was actually installed
