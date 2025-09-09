@@ -762,6 +762,39 @@ static void log_event_json(const struct event *e)
     fflush(f);
 }
 
+static void check_process_using_ports(__u32 tgid, const char *comm, __u32 event_type)
+{
+    // Check if this process is using any of our monitored ports
+    for (uint32_t i = 0; i < target_count; i++) {
+        if (ports[i][0] == '\0') continue; // Skip empty slots
+        
+        // Use lsof to check if this process has the port open
+        char cmd[1024];
+        snprintf(cmd, sizeof(cmd), "lsof -p %u %s 2>/dev/null", tgid, ports[i]);
+        
+        FILE *lsof = popen(cmd, "r");
+        if (lsof) {
+            char line[512];
+            int has_port_open = 0;
+            while (fgets(line, sizeof(line), lsof)) {
+                if (strstr(line, ports[i])) {
+                    has_port_open = 1;
+                    break;
+                }
+            }
+            pclose(lsof);
+            
+            if (has_port_open && event_type == 1) { // OPEN event
+                // This process is using our port - trigger mode change
+                handle_port_state_transition(i, 1, tgid, comm);
+            } else if (!has_port_open && event_type == 2) { // CLOSE event
+                // This process closed our port - trigger mode change
+                handle_port_state_transition(i, 2, tgid, comm);
+            }
+        }
+    }
+}
+
 static int handle_event(void *ctx, void *data, size_t len)
 {
     (void)ctx;
@@ -787,7 +820,13 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Handle port state transitions FIRST (for mode switching)
     if (e->type == 1 || e->type == 2) { // OPEN or CLOSE events
-        handle_port_state_transition(e->port_idx, e->type, e->tgid, e->comm);
+        if (e->port_idx == 0) {
+            // Special case: port 0 means "check all ports" - this is from our simplified eBPF
+            // Check if this process is actually using any of our monitored ports
+            check_process_using_ports(e->tgid, e->comm, e->type);
+        } else {
+            handle_port_state_transition(e->port_idx, e->type, e->tgid, e->comm);
+        }
     }
     
     // Only log events that pass our real application filter

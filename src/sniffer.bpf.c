@@ -207,9 +207,13 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        /* Minimal raw tracepoint - just count, no other operations */
+        /* Emit events for ALL successful openat/openat2 - let daemon filter by process name */
         __u32 dkey = 0; struct dbg_open_vals *dv_enter = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv_enter) dv_enter->enter_seen_raw += 1;
+        
+        /* Store tgid for later processing in sys_exit */
+        __u8 flag = 1;
+        bpf_map_update_elem(&pending_open_writable, &tgid, &flag, BPF_ANY);
         return 0;
     }
 
@@ -332,9 +336,23 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        /* Path matching and fd mapping is handled by individual tracepoints */
+        /* Emit OPEN events for ALL successful openat/openat2 - daemon will filter by process name */
         __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
         if (dv2) dv2->exit_seen_raw += 1;
+        
+        /* If openat/openat2 was successful, emit OPEN event for port 0 (daemon will check process) */
+        if (ret >= 0) {  // Successful open
+            if (dv2) dv2->enter_matches += 1; // Count successful opens
+            
+            // Emit OPEN event for port 0 - daemon will check if this process is using our ports
+            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+            if (e) {
+                fill_common(e, EV_OPEN);
+                e->cmd = 0; e->ret = ret; e->dir = 0; e->port_idx = 0; // Port 0 = "check all ports"
+                e->data_len = 0; e->data_trunc = 0;
+                bpf_ringbuf_submit(e, 0);
+            }
+        }
         return 0;
     }
 
