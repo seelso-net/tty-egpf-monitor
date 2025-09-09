@@ -447,9 +447,18 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
     if (!sg)
         return 0;
-    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
-    if (glen <= 0)
-        return 0;
+    // Use bpf_probe_read_user instead of bpf_probe_read_user_str to avoid crashes on Ubuntu 24.04
+    int glen = bpf_probe_read_user(sg->path, sizeof(sg->path), filename);
+    if (glen != 0) {
+        // If read fails, try to read just the first few bytes
+        glen = bpf_probe_read_user(sg->path, 8, filename);
+        if (glen != 0) return 0;
+        sg->path[8] = '\0'; // Null terminate
+        glen = 8;
+    } else {
+        // Find null terminator
+        for (glen = 0; glen < sizeof(sg->path) && sg->path[glen] != '\0'; glen++);
+    }
 
         __s32 matched_idx = -1;
 #pragma unroll
@@ -487,9 +496,18 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
     struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
     if (!sg)
         return 0;
-    int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
-    if (glen <= 0)
-        return 0;
+    // Use bpf_probe_read_user instead of bpf_probe_read_user_str to avoid crashes on Ubuntu 24.04
+    int glen = bpf_probe_read_user(sg->path, sizeof(sg->path), filename);
+    if (glen != 0) {
+        // If read fails, try to read just the first few bytes
+        glen = bpf_probe_read_user(sg->path, 8, filename);
+        if (glen != 0) return 0;
+        sg->path[8] = '\0'; // Null terminate
+        glen = 8;
+    } else {
+        // Find null terminator
+        for (glen = 0; glen < sizeof(sg->path) && sg->path[glen] != '\0'; glen++);
+    }
 
         __s32 matched_idx = -1;
 #pragma unroll
