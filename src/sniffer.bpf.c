@@ -207,9 +207,47 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
     if (id == __NR_openat || id == __NR_openat2) {
-        /* Just capture flags to determine writability - path matching is done in individual tracepoints */
+        /* Enhanced raw tracepoint with path matching for Ubuntu 24.04 compatibility */
         __u32 dkey = 0; struct dbg_open_vals *dv_enter = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv_enter) dv_enter->enter_seen_raw += 1;
+        
+        /* Try to do path matching in raw tracepoint for Ubuntu 24.04 */
+        const char *filename = NULL;
+        bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+        if (filename) {
+            __u32 k0 = 0;
+            struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
+            if (sg) {
+                // Try to read the filename safely
+                int glen = bpf_probe_read_user(sg->path, 8, filename); // Read only first 8 bytes
+                if (glen == 0) {
+                    sg->path[8] = '\0'; // Null terminate
+                    // Check if this matches any of our target paths
+                    __s32 matched_idx = -1;
+                    for (int i = 0; i < MAX_TARGETS; i++) {
+                        __u32 ki = i;
+                        struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
+                        if (!tpv) continue;
+                        struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+                        if (!sw) continue;
+                        bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+                        if (sw->path[0] == '\0') continue;
+                        // Simple prefix match for first 8 characters
+                        int match = 1;
+                        for (int j = 0; j < 8 && sg->path[j] != '\0' && sw->path[j] != '\0'; j++) {
+                            if (sg->path[j] != sw->path[j]) { match = 0; break; }
+                        }
+                        if (match) { matched_idx = i; break; }
+                    }
+                    if (matched_idx >= 0) {
+                        __u32 midx = (unsigned)matched_idx;
+                        if (midx >= MAX_TARGETS/2) midx = midx - MAX_TARGETS/2;
+                        bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
+                        if (dv_enter) { dv_enter->enter_matches += 1; dv_enter->last_tgid = tgid; dv_enter->last_idx = midx; }
+                    }
+                }
+            }
+        }
         /* Also capture flags to determine writability */
         if (id == __NR_openat) {
             int flags = 0; bpf_probe_read_kernel(&flags, sizeof(flags), &ctx->args[2]);
@@ -436,53 +474,12 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
     return 0;
 }
 
-/* ---------- Fallback: syscall-specific openat hooks (jammy-friendly) ---------- */
+/* ---------- Individual tracepoints disabled on Ubuntu 24.04 ---------- */
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
 {
-    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    const char *filename = NULL;
-    bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
-    __u32 k0 = 0;
-    struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
-    if (!sg)
-        return 0;
-    // Use bpf_probe_read_user instead of bpf_probe_read_user_str to avoid crashes on Ubuntu 24.04
-    int glen = bpf_probe_read_user(sg->path, sizeof(sg->path), filename);
-    if (glen != 0) {
-        // If read fails, try to read just the first few bytes
-        glen = bpf_probe_read_user(sg->path, 8, filename);
-        if (glen != 0) return 0;
-        sg->path[8] = '\0'; // Null terminate
-        glen = 8;
-    } else {
-        // Find null terminator
-        for (glen = 0; glen < sizeof(sg->path) && sg->path[glen] != '\0'; glen++);
-    }
-
-        __s32 matched_idx = -1;
-#pragma unroll
-            for (int i = 0; i < MAX_TARGETS; i++) {
-                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-                if (!sw) break;
-                __u32 ki = i;
-                struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
-                if (!tpv) continue;
-                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-        if (sw->path[0] == '\0') continue;
-                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
-            }
-        if (matched_idx >= 0) {
-            __u32 midx = (unsigned)matched_idx;
-            // If this is an alias match (index >= MAX_TARGETS/2), map back to real port index
-            if (midx >= MAX_TARGETS/2) {
-                midx = midx - MAX_TARGETS/2;
-            }
-        bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
-        bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
-        __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
-        if (dv) { dv->enter_matches += 1; dv->last_tgid = tgid; dv->last_idx = midx; }
-    }
+    // Individual tracepoints disabled on Ubuntu 24.04 due to bpf_probe_read_user issues
+    // Raw tracepoints handle the functionality instead
     return 0;
 }
 
