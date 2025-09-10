@@ -202,6 +202,11 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     long id = 0;
     bpf_probe_read_kernel(&id, sizeof(id), &ctx->id);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    
+    // Debug: Only log openat syscalls to reduce noise
+    if (id == __NR_openat || id == __NR_openat2) {
+        bpf_printk("RAW_SYS_ENTER: openat id=%ld tgid=%u", id, tgid);
+    }
 
     if (id == __NR_openat || id == __NR_openat2) {
         /* Capture filename and try to match now; store matched index for exit */

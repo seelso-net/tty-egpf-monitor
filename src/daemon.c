@@ -762,6 +762,10 @@ static int handle_event(void *ctx, void *data, size_t len)
     (void)ctx;
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
+    
+    // Debug: Log every event we receive
+    fprintf(stderr, "DEBUG: handle_event type=%d port_idx=%d tgid=%u comm='%s' ret=%ld\n", 
+            e->type, e->port_idx, e->tgid, e->comm, e->ret);
 
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
@@ -1584,13 +1588,13 @@ int main(int argc, char **argv)
     
     // Check if programs are actually attached to tracepoints
     if (g_skel->links.tp_raw_sys_enter) {
-        // tp_raw_sys_enter program attached to tracepoint
+        fprintf(stderr, "SUCCESS: tp_raw_sys_enter program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_raw_sys_enter program NOT attached to tracepoint\n");
     }
     
     if (g_skel->links.tp_raw_sys_exit) {
-        // tp_raw_sys_exit program attached to tracepoint
+        fprintf(stderr, "SUCCESS: tp_raw_sys_exit program attached to tracepoint\n");
     } else {
         fprintf(stderr, "ERROR: tp_raw_sys_exit program NOT attached to tracepoint\n");
     }
