@@ -367,7 +367,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
             __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
             if (dv2) dv2->exit_seen_raw += 1;
 
-            /* If path match was recorded, only map fd; do NOT emit OPEN here */
+            /* If path match was recorded, map fd AND emit OPEN event */
             __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
             if (idxp) {
                 __u32 midx = *idxp;
@@ -375,6 +375,18 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
+                
+                /* Emit OPEN event since specific openat tracepoints aren't working */
+                struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+                if (o) { 
+                    fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; 
+                    bpf_ringbuf_submit(o, 0); 
+                }
+                
+                /* Mark emitted to allow read/write logging */
+                __u8 emitted = 1;
+                bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
+                
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         }
@@ -532,7 +544,10 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     
     /* Always emit OPEN event for all monitored TTY opens */
     struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-    if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
+    if (o) { 
+        fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; 
+        bpf_ringbuf_submit(o, 0); 
+    }
     /* Mark emitted to allow read/write logging */
     __u8 emitted = 1;
     bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);

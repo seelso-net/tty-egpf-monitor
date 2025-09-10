@@ -763,9 +763,6 @@ static int handle_event(void *ctx, void *data, size_t len)
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
     
-    // Debug: Log every event we receive
-    fprintf(stderr, "DEBUG: handle_event type=%d port_idx=%d tgid=%u comm='%s' ret=%ld\n", 
-            e->type, e->port_idx, e->tgid, e->comm, e->ret);
 
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
@@ -790,12 +787,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Only log events that pass our real application filter
     if (is_real_application(e)) {
-        fprintf(stderr, "DEBUG: Logging event type=%d port_idx=%d tgid=%u comm='%s'\n", 
-                e->type, e->port_idx, e->tgid, e->comm);
         log_event_json(e);
-    } else {
-        fprintf(stderr, "DEBUG: NOT logging event type=%d port_idx=%d tgid=%u comm='%s' (filtered out)\n", 
-                e->type, e->port_idx, e->tgid, e->comm);
     }
     
     pthread_mutex_unlock(&ports_mu);
