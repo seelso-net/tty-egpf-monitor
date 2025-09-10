@@ -815,7 +815,10 @@ static int sync_targets_map(void)
     
     for (uint32_t i = 0; i < target_count; i++) {
         // Store resolved path at index i
-        if (bpf_map_update_elem(tp_fd, &i, ports[i], BPF_ANY)) return -1;
+        struct pathval pv;
+        snprintf(pv.path, sizeof(pv.path), "%s", ports[i]);
+        fprintf(stderr, "DEBUG: sync_targets_map i=%u ports[%u]='%s' pv.path='%s'\n", i, i, ports[i], pv.path);
+        if (bpf_map_update_elem(tp_fd, &i, &pv, BPF_ANY)) return -1;
         
         // Store original path (alias) at index i + MAX_PORTS for symlink matching
         if (original_paths[i][0] != '\0' && strcmp(original_paths[i], ports[i]) != 0) {

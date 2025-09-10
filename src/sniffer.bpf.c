@@ -222,14 +222,11 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         __s32 matched_idx = -1;
 #pragma unroll
         for (int i = 0; i < MAX_TARGETS; i++) {
-            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-            if (!sw) break;
             __u32 ki = i;
             struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
             if (!tpv) continue;
-            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-            if (sw->path[0] == '\0') continue;
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            if (tpv->path[0] == '\0') continue;
+            if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
@@ -435,6 +432,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
 {
+    bpf_printk("openat-enter TRIGGERED");
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     const char *filename = NULL;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
@@ -445,18 +443,17 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
     if (glen <= 0)
         return 0;
+    
+    bpf_printk("openat-enter: tgid=%u filename='%s'", tgid, sg->path);
 
         __s32 matched_idx = -1;
 #pragma unroll
             for (int i = 0; i < MAX_TARGETS; i++) {
-                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-                if (!sw) break;
                 __u32 ki = i;
                 struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
                 if (!tpv) continue;
-                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-        if (sw->path[0] == '\0') continue;
-                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+                if (tpv->path[0] == '\0') continue;
+                if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
             }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
@@ -464,7 +461,7 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
             if (midx >= MAX_TARGETS/2) {
                 midx = midx - MAX_TARGETS/2;
             }
-        bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
+        bpf_printk("openat-enter MATCH: tgid=%u filename='%s' idx=%u", tgid, sg->path, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv) { dv->enter_matches += 1; dv->last_tgid = tgid; dv->last_idx = midx; }
@@ -489,14 +486,11 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
         __s32 matched_idx = -1;
 #pragma unroll
         for (int i = 0; i < MAX_TARGETS; i++) {
-            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
-            if (!sw) break;
             __u32 ki = i;
             struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
             if (!tpv) continue;
-            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
-        if (sw->path[0] == '\0') continue;
-            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            if (tpv->path[0] == '\0') continue;
+            if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
