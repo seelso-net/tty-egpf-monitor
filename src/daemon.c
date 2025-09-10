@@ -991,9 +991,9 @@ static void *fd_scanner_thread(void *arg)
             }
         }
         
-        // Sleep for 5 seconds between scans instead of 500ms to reduce CPU usage
-        struct timespec req = { .tv_sec = 5, .tv_nsec = 0 }; // 5 seconds
-        // FD scanner sleeping for 5 seconds...
+        // Sleep for 30 seconds between scans to avoid interrupting ring buffer poll
+        struct timespec req = { .tv_sec = 30, .tv_nsec = 0 }; // 30 seconds
+        // FD scanner sleeping for 30 seconds...
         nanosleep(&req, NULL);
     }
             // FD scanner thread exiting

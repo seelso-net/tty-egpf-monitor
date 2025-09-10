@@ -203,10 +203,8 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     bpf_probe_read_kernel(&id, sizeof(id), &ctx->id);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     
-    // Debug: Only log openat syscalls to reduce noise
-    if (id == __NR_openat || id == __NR_openat2) {
-        bpf_printk("RAW_SYS_ENTER: openat id=%ld tgid=%u", id, tgid);
-    }
+    // Debug: Log all syscalls to see what we're getting
+    bpf_printk("RAW_SYS_ENTER: id=%ld tgid=%u (openat=%d openat2=%d)", id, tgid, __NR_openat, __NR_openat2);
 
     if (id == __NR_openat || id == __NR_openat2) {
         /* Capture filename and try to match now; store matched index for exit */
@@ -512,12 +510,15 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 {
     __s64 ret = 0; 
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
+    
+    bpf_printk("openat-exit: tgid=%u ret=%ld", tgid, ret);
+    
     if (ret < 0) {
-        __u32 tgid_fail = bpf_get_current_pid_tgid() >> 32;
-        bpf_map_delete_elem(&pending_open_idx, &tgid_fail);
+        bpf_printk("openat-exit: FAILED tgid=%u ret=%ld", tgid, ret);
+        bpf_map_delete_elem(&pending_open_idx, &tgid);
         return 0;
     }
-    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 val = 1; __u32 midx = *idxp;
