@@ -243,14 +243,14 @@ static void log_simple_data(uint32_t port_idx, const char *direction, const char
 
 // Check if this is a duplicate event (same process, same type, within short time)
 static bool is_duplicate_event(uint32_t port_idx, const struct event *e) {
-    if (port_idx >= MAX_PORTS) return false;
+    if (port_idx >= MAX_PORTS || !e) return false;
     
     struct last_event *last = &last_events[port_idx];
     uint64_t time_diff = e->ts - last->ts;
     
     // Consider it duplicate if same process, same type, within 100ms
     if (last->tgid == e->tgid && last->type == e->type && 
-        strcmp(last->comm, e->comm) == 0 && time_diff < 100000000) { // 100ms in nanoseconds
+        strncmp(last->comm, e->comm, sizeof(last->comm)) == 0 && time_diff < 100000000) { // 100ms in nanoseconds
         return true;
     }
     
