@@ -29,10 +29,31 @@ endif
 CFLAGS := -O2 -g
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH)
 
-# Use available kernel headers for libbpf
-KERNEL_HEADERS := /usr/src/linux-headers-6.8.0-79-generic
-INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
-BPF_INCLUDES := -Ibuild -Isrc -I$(KERNEL_HEADERS)/tools/bpf/resolve_btfids/libbpf/include
+# Detect available kernel headers dynamically
+# Try to find the best available kernel headers
+KERNEL_VERSION := $(shell uname -r)
+KERNEL_HEADERS := $(shell \
+	if [ -d "/usr/src/linux-headers-$(KERNEL_VERSION)" ]; then \
+		echo "/usr/src/linux-headers-$(KERNEL_VERSION)"; \
+	elif [ -d "/usr/src/linux-headers-generic" ]; then \
+		echo "/usr/src/linux-headers-generic"; \
+	else \
+		ls -d /usr/src/linux-headers-*-generic 2>/dev/null | sort -V | tail -1 || echo "/usr/include"; \
+	fi)
+
+# Use custom libbpf if available, otherwise fall back to system
+CUSTOM_LIBBPF_INCLUDE := /usr/local/include
+SYSTEM_LIBBPF_INCLUDE := /usr/include
+
+# Check if custom libbpf headers exist
+ifeq ($(wildcard $(CUSTOM_LIBBPF_INCLUDE)/bpf/libbpf.h),)
+  LIBBPF_INCLUDE := $(SYSTEM_LIBBPF_INCLUDE)
+else
+  LIBBPF_INCLUDE := $(CUSTOM_LIBBPF_INCLUDE)
+endif
+
+INCLUDES := -Ibuild -Isrc -I$(LIBBPF_INCLUDE)
+BPF_INCLUDES := -Ibuild -Isrc -I$(LIBBPF_INCLUDE)
 
 all: build/tty-egpf-monitord build/tty-egpf-monitor
 
@@ -61,15 +82,20 @@ build/sniffer.skel.h: build/sniffer.bpf.o | build
 # 3. Otherwise (local dev build) use whatever is in /usr/local/lib and keep rpath
 #    so the binary finds the custom libbpf shared object at runtime.
 
+# Always statically link libbpf for package builds to ensure compatibility
+# This embeds libbpf 1.6.2 into the binary, avoiding runtime dependency issues
 ifdef DEB_BUILD_ARCH
-  # For Debian builds, use static linking to avoid dpkg-shlibdeps issues with custom libbpf
-  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
-  LIBBPF_CFLAGS := -I/usr/local/include
-  LIBBPF_LDFLAGS := -L/usr/local/lib64
+  # For Debian builds, always use static linking with custom libbpf
+  # This ensures the binary works on both Ubuntu 22.04 and 24.04
+  LIBBPF_LIBS := -L/usr/local/lib64 -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  LIBBPF_CFLAGS := -I$(LIBBPF_INCLUDE)
+  LIBBPF_LDFLAGS := -L/usr/local/lib64 -L/usr/local/lib
 else ifeq ($(STATIC_BPF),1)
-  LIBBPF_LIBS := -L/usr/local/lib64 -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
+  # Manual static build
+  LIBBPF_LIBS := -L/usr/local/lib64 -L/usr/local/lib -Wl,-Bstatic -lbpf -Wl,-Bdynamic -lelf -lz -lpthread
 else
-  LIBBPF_LIBS := -L/usr/local/lib64 -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib64 -Wl,-rpath,/usr/lib/x86_64-linux-gnu
+  # Development build - use dynamic linking with rpath
+  LIBBPF_LIBS := -L/usr/local/lib64 -L/usr/local/lib -lbpf -lelf -lz -lpthread -Wl,-rpath,/usr/local/lib64 -Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/lib/x86_64-linux-gnu
 endif
 
 build/tty-egpf-monitord: src/daemon.c build/sniffer.skel.h | build

@@ -522,19 +522,21 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
-    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 val = 1; __u32 midx = *idxp;
+    bpf_map_update_elem(&fd_interest, &k, &val, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
-    /* Record writability per fd and emit OPEN immediately only if writable */
+    /* Record writability per fd and emit OPEN for all opens (not just writable) */
     __u8 *wr = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr && *wr) {
         __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
-        /* Emit OPEN now for writable opens */
-        struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-        if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
-        /* Mark emitted to allow READ logging */
-        bpf_map_update_elem(&fd_open_emitted, &k, wr, BPF_ANY);
     }
+    
+    /* Always emit OPEN event for all monitored TTY opens */
+    struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+    if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
+    /* Mark emitted to allow read/write logging */
+    __u8 emitted = 1;
+    bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
@@ -553,16 +555,20 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
-    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 one = 1; __u32 midx = *idxp;
-    bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
+    struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 val2 = 1; __u32 midx = *idxp;
+    bpf_map_update_elem(&fd_interest, &k, &val2, BPF_ANY);
     bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
     __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
     if (wr2 && *wr2) {
         __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
-        struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
-        if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=ret; o2->dir=0; o2->port_idx=midx; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
-        bpf_map_update_elem(&fd_open_emitted, &k, wr2, BPF_ANY);
     }
+    
+    /* Always emit OPEN event for all monitored TTY opens */
+    struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
+    if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=ret; o2->dir=0; o2->port_idx=midx; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
+    /* Mark emitted to allow read/write logging */
+    __u8 emitted2 = 1;
+    bpf_map_update_elem(&fd_open_emitted, &k, &emitted2, BPF_ANY);
     bpf_map_delete_elem(&pending_open_writable, &tgid);
     bpf_map_delete_elem(&pending_open_idx, &tgid);
     return 0;
@@ -736,12 +742,7 @@ int tp_exit_read(struct trace_event_raw_sys_exit *ctx)
         return 0;
     }
 
-    /* Drop READ unless fd was opened writable and OPEN was emitted */
-    __u8 *was_wr = bpf_map_lookup_elem(&fd_is_writable, &k);
-    if (!was_wr) {
-        bpf_map_delete_elem(&rd_ctx, &tgid);
-        return 0;
-    }
+    /* Only capture READ if OPEN was emitted (now works for all opens) */
     __u8 *emitted = bpf_map_lookup_elem(&fd_open_emitted, &k);
     if (!emitted) {
         bpf_map_delete_elem(&rd_ctx, &tgid);
