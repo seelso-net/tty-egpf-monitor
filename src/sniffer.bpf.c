@@ -432,7 +432,6 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
 {
-    bpf_printk("openat-enter TRIGGERED");
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     const char *filename = NULL;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
