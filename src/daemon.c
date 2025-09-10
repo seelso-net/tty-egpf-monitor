@@ -915,8 +915,8 @@ static int api_add_port(const char *devpath, const char *logpath, int baudrate, 
     int rc = sync_targets_map();
     write_info_line(idx);
     
-    // Scan existing processes for already-open fds to this device
-    scan_existing_fds(devpath, idx);
+    // FD scanner disabled - eBPF programs will catch opens/closes in real-time
+    // scan_existing_fds(devpath, idx);
     
     // Try to enter active mode initially if port is free
     enter_active_mode(idx);
@@ -1692,11 +1692,9 @@ int main(int argc, char **argv)
     //     fprintf(stderr, "Systemd notification sent successfully\n");
     // }
 
-    // Start background FD scanner to catch already-open FDs continuously
-    pthread_t scan_thr;
-    if (pthread_create(&scan_thr, NULL, fd_scanner_thread, NULL) != 0) {
-        fprintf(stderr, "Warning: failed to start fd scanner thread: %s\n", strerror(errno));
-    }
+    // FD scanner thread disabled to prevent ring buffer interruptions
+    // The eBPF programs will catch new opens/closes in real-time
+    pthread_t scan_thr = 0; // Not used
 
     fprintf(stderr, "Starting main event loop...\n");
     int loop_count = 0;
@@ -1728,9 +1726,8 @@ int main(int argc, char **argv)
 
     stop_flag = 1;
     pthread_kill(http_thr, SIGINT);
-    pthread_kill(scan_thr, SIGINT);
+    // scan_thr is not used (FD scanner disabled)
     pthread_join(http_thr, NULL);
-    pthread_join(scan_thr, NULL);
     
     // Clean up active monitoring for all ports
     for (uint32_t i = 0; i < MAX_PORTS; i++) {
