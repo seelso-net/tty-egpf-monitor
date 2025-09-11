@@ -1,4 +1,4 @@
-tty-egpf-monitor (0.7.16-1) unstable; urgency=high
+tty-egpf-monitor (0.7.17-1) unstable; urgency=high
 
   * Apply v0.7.0 cross-compatibility approach for Ubuntu 22.04/24.04
   * Revert to v0.7.0 eBPF implementation that emits OPEN events for all opens (not just writable)
