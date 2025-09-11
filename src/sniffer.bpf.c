@@ -202,9 +202,6 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
     long id = 0;
     bpf_probe_read_kernel(&id, sizeof(id), &ctx->id);
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    
-    // Debug: Log all syscalls to see what we're getting
-    bpf_printk("RAW_SYS_ENTER: id=%ld tgid=%u (openat=%d openat2=%d)", id, tgid, __NR_openat, __NR_openat2);
 
     if (id == __NR_openat || id == __NR_openat2) {
         /* Capture filename and try to match now; store matched index for exit */
@@ -225,11 +222,14 @@ int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
         __s32 matched_idx = -1;
 #pragma unroll
         for (int i = 0; i < MAX_TARGETS; i++) {
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
             __u32 ki = i;
             struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
             if (!tpv) continue;
-            if (tpv->path[0] == '\0') continue;
-            if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+            if (sw->path[0] == '\0') continue;
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
@@ -367,7 +367,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
             __u32 dkey2 = 0; struct dbg_open_vals *dv2 = bpf_map_lookup_elem(&dbg_open, &dkey2);
             if (dv2) dv2->exit_seen_raw += 1;
 
-            /* If path match was recorded, map fd AND emit OPEN event */
+            /* If path match was recorded, only map fd; do NOT emit OPEN here */
             __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
             if (idxp) {
                 __u32 midx = *idxp;
@@ -375,18 +375,6 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
-                
-                /* Emit OPEN event since specific openat tracepoints aren't working */
-                struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-                if (o) { 
-                    fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; 
-                    bpf_ringbuf_submit(o, 0); 
-                }
-                
-                /* Mark emitted to allow read/write logging */
-                __u8 emitted = 1;
-                bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
-                
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         }
@@ -457,17 +445,18 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), filename);
     if (glen <= 0)
         return 0;
-    
-    bpf_printk("openat-enter: tgid=%u filename='%s'", tgid, sg->path);
 
         __s32 matched_idx = -1;
 #pragma unroll
             for (int i = 0; i < MAX_TARGETS; i++) {
+                struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+                if (!sw) break;
                 __u32 ki = i;
                 struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
                 if (!tpv) continue;
-                if (tpv->path[0] == '\0') continue;
-                if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+                bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+        if (sw->path[0] == '\0') continue;
+                if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
             }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
@@ -475,7 +464,7 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
             if (midx >= MAX_TARGETS/2) {
                 midx = midx - MAX_TARGETS/2;
             }
-        bpf_printk("openat-enter MATCH: tgid=%u filename='%s' idx=%u", tgid, sg->path, midx);
+        bpf_printk("open-enter tp: tgid=%u match idx=%u\n", tgid, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
         __u32 dkey = 0; struct dbg_open_vals *dv = bpf_map_lookup_elem(&dbg_open, &dkey);
         if (dv) { dv->enter_matches += 1; dv->last_tgid = tgid; dv->last_idx = midx; }
@@ -500,11 +489,14 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
         __s32 matched_idx = -1;
 #pragma unroll
         for (int i = 0; i < MAX_TARGETS; i++) {
+            struct pathval *sw = bpf_map_lookup_elem(&scratch1, &k0);
+            if (!sw) break;
             __u32 ki = i;
             struct pathval *tpv = bpf_map_lookup_elem(&target_path, &ki);
             if (!tpv) continue;
-            if (tpv->path[0] == '\0') continue;
-            if (str_eq_n(tpv->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
+            bpf_probe_read_kernel(sw->path, sizeof(sw->path), tpv->path);
+        if (sw->path[0] == '\0') continue;
+            if (str_eq_n(sw->path, sg->path, COMPARE_MAX)) { matched_idx = i; break; }
         }
         if (matched_idx >= 0) {
             __u32 midx = (unsigned)matched_idx;
@@ -522,15 +514,12 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 {
     __s64 ret = 0; 
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
-    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
-    
-    bpf_printk("openat-exit: tgid=%u ret=%ld", tgid, ret);
-    
     if (ret < 0) {
-        bpf_printk("openat-exit: FAILED tgid=%u ret=%ld", tgid, ret);
-        bpf_map_delete_elem(&pending_open_idx, &tgid);
+        __u32 tgid_fail = bpf_get_current_pid_tgid() >> 32;
+        bpf_map_delete_elem(&pending_open_idx, &tgid_fail);
         return 0;
     }
+    __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     __u32 *idxp = bpf_map_lookup_elem(&pending_open_idx, &tgid);
     if (!idxp) return 0;
     struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 val = 1; __u32 midx = *idxp;
@@ -544,10 +533,7 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     
     /* Always emit OPEN event for all monitored TTY opens */
     struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
-    if (o) { 
-        fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; 
-        bpf_ringbuf_submit(o, 0); 
-    }
+    if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
     /* Mark emitted to allow read/write logging */
     __u8 emitted = 1;
     bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
