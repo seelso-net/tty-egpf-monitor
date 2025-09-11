@@ -1,3 +1,10 @@
+tty-egpf-monitor (0.7.13-1) unstable; urgency=high
+
+  * DEBUG: Add comprehensive event logging to diagnose filtering issues
+  * DEBUG: Print all events received by handle_event function
+  * DEBUG: Show which events are being filtered out and why
+  * DEBUG: This will help identify if events are not being generated or filtered incorrectly
+
 tty-egpf-monitor (0.7.12-1) unstable; urgency=high
 
   * DEBUG: Add version and build info printing to daemon startup
