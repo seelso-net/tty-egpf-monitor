@@ -221,11 +221,6 @@ jobs:
         echo "Verifying bpftool installation..."
         bpftool version
 
-    - name: Build application
-      run: |
-        make clean
-        make
-
     - name: Check if this is a tag release
       id: check_tag
       run: |
@@ -250,6 +245,11 @@ jobs:
         sed -Ei "0,/tty-egpf-monitor \([^)]+\)/s//tty-egpf-monitor (${VERSION}-1)/" debian/changelog
         echo "Updated changelog:"
         head -5 debian/changelog
+
+    - name: Build application
+      run: |
+        make clean
+        make
 
     - name: Clean Debian outputs
       run: |
@@ -614,21 +614,6 @@ jobs:
           exit 1
         fi
 
-    - name: Build application
-      run: |
-        echo "=== Debug: Checking kernel headers and bpftool ==="
-        echo "Current bpftool: $(which bpftool)"
-        echo "bpftool version: $(bpftool version)"
-        echo "Testing gen skeleton:"
-        bpftool gen skeleton --help | head -5
-        echo "Available kernel headers:"
-        ls -la /usr/src/ | grep linux-headers || echo "No linux-headers found"
-        echo "HWE kernel headers:"
-        ls -la /usr/src/ | grep hwe || echo "No HWE headers found"
-        echo "=== Starting build ==="
-        make clean
-        make
-
     - name: Check if this is a tag release
       id: check_tag
       run: |
@@ -653,6 +638,21 @@ jobs:
         sed -Ei "0,/tty-egpf-monitor \([^)]+\)/s//tty-egpf-monitor (${VERSION}-1)/" debian/changelog
         echo "Updated changelog:"
         head -5 debian/changelog
+
+    - name: Build application
+      run: |
+        echo "=== Debug: Checking kernel headers and bpftool ==="
+        echo "Current bpftool: $(which bpftool)"
+        echo "bpftool version: $(bpftool version)"
+        echo "Testing gen skeleton:"
+        bpftool gen skeleton --help | head -5
+        echo "Available kernel headers:"
+        ls -la /usr/src/ | grep linux-headers || echo "No linux-headers found"
+        echo "HWE kernel headers:"
+        ls -la /usr/src/ | grep hwe || echo "No HWE headers found"
+        echo "=== Starting build ==="
+        make clean
+        make
 
     - name: Use jammy control file
       run: |
