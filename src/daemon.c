@@ -763,6 +763,9 @@ static int handle_event(void *ctx, void *data, size_t len)
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
     
+    // DEBUG: Print all events to see what we're getting
+    fprintf(stderr, "DEBUG: Event received - type=%d, port_idx=%d, tgid=%d, comm=%s, ret=%d\n", 
+            e->type, e->port_idx, e->tgid, e->comm, e->ret);
 
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
@@ -770,12 +773,14 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Apply smart filtering - ignore system noise
     if (should_ignore_event(e)) {
+        fprintf(stderr, "DEBUG: Event ignored by should_ignore_event\n");
         pthread_mutex_unlock(&ports_mu);
         return 0;  // Skip this event entirely
     }
     
     // Check for duplicate events to reduce spam
     if (is_duplicate_event(e->port_idx, e)) {
+        fprintf(stderr, "DEBUG: Event ignored as duplicate\n");
         pthread_mutex_unlock(&ports_mu);
         return 0;  // Skip duplicate events
     }
@@ -787,7 +792,10 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Only log events that pass our real application filter
     if (is_real_application(e)) {
+        fprintf(stderr, "DEBUG: Event passed is_real_application, logging...\n");
         log_event_json(e);
+    } else {
+        fprintf(stderr, "DEBUG: Event failed is_real_application filter\n");
     }
     
     pthread_mutex_unlock(&ports_mu);
