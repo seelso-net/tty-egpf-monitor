@@ -1484,6 +1484,14 @@ int main(int argc, char **argv)
         return 1;
     }
     
+    // Print daemon version and build info
+    fprintf(stderr, "=== TTY-EGPF-MONITOR DAEMON STARTING ===\n");
+    fprintf(stderr, "Version: 0.7.11-1 (APT package)\n");
+    fprintf(stderr, "Build: %s %s\n", __DATE__, __TIME__);
+    fprintf(stderr, "Binary: %s\n", argv[0]);
+    fprintf(stderr, "PID: %d\n", getpid());
+    fprintf(stderr, "==========================================\n");
+    
     // Add diagnostic information
     fprintf(stderr, "Kernel version: ");
     FILE *kver = fopen("/proc/version", "r");
