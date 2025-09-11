@@ -1,10 +1,13 @@
-tty-egpf-monitor (0.7.14-1) unstable; urgency=high
+tty-egpf-monitor (0.7.15-1) unstable; urgency=high
 
-  * CRITICAL FIX: Move changelog update before build in release workflow
-  * CRITICAL FIX: The changelog was being updated AFTER building the binary
-  * CRITICAL FIX: This caused version mismatch: package showed new version but binary had old version
-  * CRITICAL FIX: Now changelog is updated BEFORE building, ensuring binary and package versions match
-  * CRITICAL FIX: Fixes issue where APT package 0.7.13 contained binary with version 0.7.11
+  * Apply v0.7.0 cross-compatibility approach for Ubuntu 22.04/24.04
+  * Revert to v0.7.0 eBPF implementation that emits OPEN events for all opens (not just writable)
+  * This approach was specifically designed for Ubuntu 22.04/24.04 cross-compatibility
+  * Fixes the issue where external process operations were not being detected
+  * Tested and confirmed working on Ubuntu 24.04 with ttyUSB0
+  * Uses simplified tracepoint approach from v0.7.0
+  * Emits OPEN events for all successful opens, not just writable ones
+  * Maintains compatibility with both Ubuntu 22.04 and 24.04
 
 tty-egpf-monitor (0.7.13-1) unstable; urgency=high
 
