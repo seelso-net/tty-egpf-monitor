@@ -1357,11 +1357,11 @@ Maintainer: Adrian <adrian@example.com>
 Installed-Size: 24
 Depends: libc6 (>= 2.34)
 Filename: pool/jammy/tty-egpf-monitor-cli_0.7.15-1_amd64~jammy.deb
-Size: 6750
-MD5sum: 9307ff8f05a9842fb391fabdfc63dafc
-SHA1: d95c1b547fdeed6f6e4a70055680376322681e4a
-SHA256: b99809964ae4de4c4734827f437898657d00b8dd1758749ae36069cdf564be20
-SHA512: d111daa9e7dfe3b305b4dba4a202e13fd42ebbf239c574079d94b2fb44603452c01a156c2f28c1c34041b8054e694f673d812460c6a84f83b16445e372c8ca20
+Size: 6832
+MD5sum: b1f9a44167c743a9ff330ebfb54b1561
+SHA1: f458b2c5f63539bd2c6314b1c0f711c058f2c213
+SHA256: cccbffd6aab983895f61c6f3f1950002c960460c31c7b0803c6b70691257717f
+SHA512: 2d88a181f2b5bb1950c0c2be1f087af1b1251f490ace97f2a9797392d54ad6044ea1e361169dd116420712a0f863afff66ec74d59ef2be175aba6e7c5eeba57c
 Description: CLI for tty-egpf-monitord HTTP API
  Lightweight command line client to manage the local daemon and list/add
  monitored ports, suitable for container environments.
@@ -3658,11 +3658,11 @@ Maintainer: Adrian <adrian@example.com>
 Installed-Size: 1632
 Depends: libc6 (>= 2.34), libelf1 (>= 0.144), zlib1g (>= 1:1.2.3.3), adduser, libcap2-bin
 Filename: pool/jammy/tty-egpf-monitord_0.7.15-1_amd64~jammy.deb
-Size: 285254
-MD5sum: 02e49c67244032b2065ee318f073beba
-SHA1: ace7a36649b868053a8d318e083f456ebef5c5d3
-SHA256: 1476c75628d1c5bf13d822e1c3cfab96b2f29dc255be29fc4e1605cd1942612a
-SHA512: 0589a2e6c9b70c2a3f7ed6fecc671c8e5bd53a0d49363cec8b9c2e5d5318d613d7e87ce5f1a271e307229b38fc2f239b95de49efb0bb806d5813daaea794762b
+Size: 285320
+MD5sum: 950c60b73f31185630ef1a8a784bb08a
+SHA1: 94954af8f0cdaa0bf154a6e622e750c4119283e0
+SHA256: 17ec2b562f9670ffe2c1bc98145c106887192f8daf72626e25d31a8f59b5feb1
+SHA512: c37f4ca117e5a4428dcbfcda38abe147f4a90e1f9cb755fe17e5bcde0521333bd1cf1138277a0a55a1d1690967c5aa3019963cca75b88930929eecbe31e28fb3
 Description: eBPF serial monitoring daemon with HTTP API
  A sophisticated real-time serial port monitoring tool that combines
  the power of eBPF (extended Berkeley Packet Filter) with intelligent
