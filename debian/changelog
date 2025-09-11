@@ -1,3 +1,18 @@
+tty-egpf-monitor (0.7.10-1) unstable; urgency=high
+
+  * CRITICAL FIX: Correct version labeling - APT package was mislabeled as 0.7.9-1 but contained v0.4.73
+  * MAJOR FIX: TTY event detection from external processes now works correctly
+  * FIXED: eBPF programs now emit OPEN events via raw syscall tracepoints
+  * FIXED: Ring buffer interruptions eliminated by disabling fd_scanner
+  * FIXED: Event filtering logic allows external process events
+  * WORKING: Port state transitions (ACTIVE ↔ PASSIVE)
+  * WORKING: Event logging to files with timestamps
+  * WORKING: Reliable operation on Ubuntu 24.04
+  * This version resolves the core issue where the daemon only detected its own events
+  * Now properly monitors TTY usage from minicom, picocom, stty, and all other applications
+
+ -- Adrian <adrian@example.com>  Thu, 11 Sep 2025 21:50:00 +0000
+
 tty-egpf-monitor (0.4.45-1) unstable; urgency=medium
 
   * fix(bpf): initialize scratch buffers at load time

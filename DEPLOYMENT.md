@@ -186,7 +186,7 @@ sudo cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_openat/enable
 ```bash
 # Error: libbpf.h: No such file or directory
 # Solution: Install libbpf-dev or build from source
-sudo apt install -y libbpf-dev
+
 
 # For Ubuntu 22.04, build from source:
 wget https://github.com/libbpf/libbpf/archive/refs/tags/v1.6.2.tar.gz
