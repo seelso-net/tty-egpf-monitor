@@ -333,6 +333,9 @@ static bool should_ignore_event(const struct event *e) {
     // Event type filtering:
     // 1 = OPEN, 2 = CLOSE, 3 = READ, 4 = WRITE, 5 = IOCTL
     
+    // Event type filtering:
+    // 1 = OPEN, 2 = CLOSE, 3 = READ, 4 = WRITE, 5 = IOCTL
+    
     if (e->type == 1 || e->type == 2) {  // OPEN or CLOSE events
         // Don't filter OPEN/CLOSE here - we handle them separately for mode switching
         // and apply logging filters later
@@ -764,8 +767,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     const struct event *e = data;
     
     // DEBUG: Print all events to see what we're getting
-    fprintf(stderr, "DEBUG: Event received - type=%d, port_idx=%d, tgid=%d, comm=%s, ret=%d\n", 
-            e->type, e->port_idx, e->tgid, e->comm, e->ret);
+    // Event received and processed
 
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
@@ -773,14 +775,12 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Apply smart filtering - ignore system noise
     if (should_ignore_event(e)) {
-        fprintf(stderr, "DEBUG: Event ignored by should_ignore_event\n");
         pthread_mutex_unlock(&ports_mu);
         return 0;  // Skip this event entirely
     }
     
     // Check for duplicate events to reduce spam
     if (is_duplicate_event(e->port_idx, e)) {
-        fprintf(stderr, "DEBUG: Event ignored as duplicate\n");
         pthread_mutex_unlock(&ports_mu);
         return 0;  // Skip duplicate events
     }
@@ -792,10 +792,7 @@ static int handle_event(void *ctx, void *data, size_t len)
     
     // Only log events that pass our real application filter
     if (is_real_application(e)) {
-        fprintf(stderr, "DEBUG: Event passed is_real_application, logging...\n");
         log_event_json(e);
-    } else {
-        fprintf(stderr, "DEBUG: Event failed is_real_application filter\n");
     }
     
     pthread_mutex_unlock(&ports_mu);
@@ -1494,7 +1491,7 @@ int main(int argc, char **argv)
     
     // Print daemon version and build info
     fprintf(stderr, "=== TTY-EGPF-MONITOR DAEMON STARTING ===\n");
-    fprintf(stderr, "Version: 0.7.18-1 (APT package)\n");
+    fprintf(stderr, "Version: 0.7.19-1 (APT package)\n");
     fprintf(stderr, "Build: %s %s\n", __DATE__, __TIME__);
     fprintf(stderr, "Binary: %s\n", argv[0]);
     fprintf(stderr, "PID: %d\n", getpid());
