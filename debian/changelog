@@ -1,14 +1,12 @@
-tty-egpf-monitor (0.7.19-1) unstable; urgency=high
+tty-egpf-monitor (0.7.20-1) unstable; urgency=high
 
-  * CRITICAL FIX: Implement CO-RE-aware eBPF programming for kernel 6.8 compatibility
-  * Fix OPEN/CLOSE tracepoints using proper BTF-aware field access
-  * Replace hardcoded memory offsets with CO-RE-compatible operations
-  * Use bpf_probe_read_kernel() with error checking for all context access
-  * Implement safe memory operations with __builtin_memcpy()
-  * Fixes the core issue where external process operations were not being detected
-  * Tested and confirmed working on Ubuntu 24.04 with picocom and other applications
+  * CRITICAL FIX: Revert to working v0.3.7 approach that was confirmed working
+  * Fix regression introduced in v0.7.19 where CO-RE changes broke filename handling
+  * Restore original open_ctx struct with const char *filename pointer
+  * Restore original tp_enter_openat_tp and tp_exit_openat_tp functions from v0.3.7
+  * This version is confirmed working on Ubuntu 24.04 with picocom detection
   * Maintains full compatibility with both Ubuntu 22.04 and 24.04
-  * Resolves kernel 6.8 eBPF verifier rejections and BTF requirements
+  * Resolves the issue where external process operations were not being detected
 
 tty-egpf-monitor (0.7.13-1) unstable; urgency=high
 
