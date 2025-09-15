@@ -375,6 +375,20 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_update_elem(&fd_interest, &k, &one, BPF_ANY);
                 bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
                 if (dv2) { dv2->exit_mapped += 1; dv2->last_fd = (__s32)ret; dv2->last_idx = midx; }
+                /* Revert to v0.3.7-like behavior: emit OPEN here as a reliable fallback */
+                __u8 *already = bpf_map_lookup_elem(&fd_open_emitted, &k);
+                if (!already) {
+                    /* Mark writability if known */
+                    __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
+                    if (wr2 && *wr2) {
+                        __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY);
+                    }
+                    struct event *o = bpf_ringbuf_reserve(&events, sizeof(*o), 0);
+                    if (o) { fill_common(o, EV_OPEN); o->cmd=0; o->ret=ret; o->dir=0; o->port_idx=midx; o->data_len=0; o->data_trunc=0; bpf_ringbuf_submit(o, 0); }
+                    __u8 emitted = 1; bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
+                }
+                /* Cleanup pending state */
+                bpf_map_delete_elem(&pending_open_writable, &tgid);
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             }
         }
@@ -535,11 +549,19 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
 
             // DEBUG: Print when we emit an event
             bpf_printk("tp_exit_openat_tp: EMITTING EVENT for %s port_idx=%d", sg->path, midx);
-
-            struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-            if (e) {
-                fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0;
-                bpf_ringbuf_submit(e, 0);
+            /* Avoid duplicate OPEN if raw_syscalls path already emitted */
+            __u8 *already = bpf_map_lookup_elem(&fd_open_emitted, &k);
+            if (!already) {
+                struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+                if (e) {
+                    fill_common(e, EV_OPEN); e->cmd=0; e->ret=ret; e->dir=0; e->port_idx=midx; e->data_len=0; e->data_trunc=0;
+                    bpf_ringbuf_submit(e, 0);
+                }
+                __u8 emitted = 1; bpf_map_update_elem(&fd_open_emitted, &k, &emitted, BPF_ANY);
+                /* If writability was captured, persist it */
+                __u8 *wr2 = bpf_map_lookup_elem(&pending_open_writable, &tgid);
+                if (wr2 && *wr2) { __u8 yes = 1; bpf_map_update_elem(&fd_is_writable, &k, &yes, BPF_ANY); }
+                bpf_map_delete_elem(&pending_open_writable, &tgid);
             }
         }
     }

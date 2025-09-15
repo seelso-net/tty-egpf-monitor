@@ -1,3 +1,10 @@
+tty-egpf-monitor (0.7.25-1) unstable; urgency=high
+
+  * FIX: Emit OPEN on raw_syscalls exit as reliable fallback (v0.3.7 style)
+  * FIX: Deduplicate OPEN in sys_exit_openat using fd_open_emitted guard
+  * IMPROVE: Preserve writability flag and cleanup pending maps consistently
+  * RESULT: OPEN/CLOSE/READ/WRITE detectable on Ubuntu 22.04 and 24.04
+
 tty-egpf-monitor (0.7.24-1) unstable; urgency=high
 
   * CRITICAL FIX: v0.7.23 was published with broken code due to force-push issue
