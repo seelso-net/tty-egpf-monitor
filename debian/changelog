@@ -1,3 +1,8 @@
+tty-egpf-monitor (0.7.29-1) unstable; urgency=high
+
+  * ENABLE: raw_syscalls enter/exit path to reliably capture OPEN on 24.04
+  * KEEP: openat/openat2 tracepoints for Jammy/Noble compatibility
+
 tty-egpf-monitor (0.7.28-1) unstable; urgency=high
 
   * ADD: openat2 enter/exit handlers with debug printk for 24.04

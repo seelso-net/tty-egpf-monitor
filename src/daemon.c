@@ -1480,7 +1480,7 @@ int main(int argc, char **argv)
     
     // Print daemon version and build info
     fprintf(stderr, "=== TTY-EGPF-MONITOR DAEMON STARTING ===\n");
-    fprintf(stderr, "Version: 0.7.28-1 (APT package)\n");
+    fprintf(stderr, "Version: 0.7.29-1 (APT package)\n");
     fprintf(stderr, "Build: %s %s\n", __DATE__, __TIME__);
     fprintf(stderr, "Binary: %s\n", argv[0]);
     fprintf(stderr, "PID: %d\n", getpid());

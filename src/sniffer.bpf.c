@@ -195,7 +195,7 @@ static __always_inline int str_eq_n(const char *a, const char *b, int n)
 
 /* (removed basename_offset function - using exact path matching only) */
 
-#if 0 /* DISABLED: raw_syscalls path (force openat-only like v0.3.7) */
+#if 1 /* ENABLED: raw_syscalls path to reliably get ret (fd) */
 /* ---------- raw_syscalls-based attach for reliable args access ---------- */
 SEC("tracepoint/raw_syscalls/sys_enter")
 int tp_raw_sys_enter(struct trace_event_raw_sys_enter *ctx)
