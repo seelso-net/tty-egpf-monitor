@@ -1,3 +1,9 @@
+tty-egpf-monitor (0.7.26-1) unstable; urgency=high
+
+  * FIX: Disable raw_syscalls path entirely; rely only on openat/openat2
+  * Behavior matches known-good v0.3.7 approach for OPEN emission
+  * Target: resolve missing OPEN/CLOSE on Ubuntu 24.04 while keeping 22.04
+
 tty-egpf-monitor (0.7.25-1) unstable; urgency=high
 
   * FIX: Emit OPEN on raw_syscalls exit as reliable fallback (v0.3.7 style)
