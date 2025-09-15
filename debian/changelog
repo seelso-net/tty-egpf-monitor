@@ -1,3 +1,11 @@
+tty-egpf-monitor (0.7.30-1) unstable; urgency=high
+
+  * ALIGN: v0.3.7 behavior for OPEN mapping
+    - Match path on openat/openat2 enter, store pending index
+    - Emit OPEN on raw_syscalls/sys_exit when ret>=0 (fd ready)
+    - Add debug printk for mapping and emission paths
+  * KEEP: openat/openat2 tracepoints for Jammy/Noble compatibility
+
 tty-egpf-monitor (0.7.29-1) unstable; urgency=high
 
   * ENABLE: raw_syscalls enter/exit path to reliably capture OPEN on 24.04
