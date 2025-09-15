@@ -1,11 +1,11 @@
-tty-egpf-monitor (0.7.20-1) unstable; urgency=high
+tty-egpf-monitor (0.7.21-1) unstable; urgency=high
 
-  * CRITICAL FIX: Revert to working v0.3.7 approach that was confirmed working
-  * Fix regression introduced in v0.7.19 where CO-RE changes broke filename handling
+  * CRITICAL FIX: Simplify event handling to match exact v0.3.7 approach
+  * Remove ALL filtering logic - log everything except our own events
   * Restore original open_ctx struct with const char *filename pointer
   * Restore original tp_enter_openat_tp and tp_exit_openat_tp functions from v0.3.7
-  * This version is confirmed working on Ubuntu 24.04 with picocom detection
-  * Maintains full compatibility with both Ubuntu 22.04 and 24.04
+  * Simplify handle_event function to match v0.3.7 exactly
+  * This version should work on both Ubuntu 22.04 and 24.04
   * Resolves the issue where external process operations were not being detected
 
 tty-egpf-monitor (0.7.13-1) unstable; urgency=high

@@ -305,19 +305,28 @@ static bool is_real_application(const struct event *e) {
         return false;
     }
     
-    // 3. For OPEN/CLOSE events, update port state and decide logging
+    // 3. For OPEN/CLOSE events, filter out system processes
     if (e->type == 1 || e->type == 2) { // OPEN/CLOSE
+        
+        // Filter out system processes that just scan devices
+        if (strncmp(e->comm, "systemd", 7) == 0 ||
+            strncmp(e->comm, "udev", 4) == 0 ||
+            strncmp(e->comm, "dbus", 4) == 0 ||
+            strncmp(e->comm, "NetworkManager", 14) == 0 ||
+            strncmp(e->comm, "ModemManager", 12) == 0) {
+            return false; // Don't log system process opens/closes
+        }
         
         if (e->type == 1) { // OPEN
             port_state[e->port_idx].active_fds++;
-            // Always log OPEN events - user wants to see all TTY activity
+            // Log OPEN events from real applications
             return true;
         } else if (e->type == 2) { // CLOSE
             if (port_state[e->port_idx].active_fds > 0) {
                 port_state[e->port_idx].active_fds--;
             }
             
-            // Always log CLOSE events - user wants to see all TTY activity
+            // Log CLOSE events from real applications
             return true;
         }
     }
@@ -765,33 +774,13 @@ static int handle_event(void *ctx, void *data, size_t len)
     (void)ctx;
     if (len < sizeof(struct event)) return 0;
     const struct event *e = data;
-    
-    // DEBUG: Print all events to see what we're getting
-    // Event received and processed
 
     /* Kernel now handles fd->port mapping in tp_exit_openat */
     
     pthread_mutex_lock(&ports_mu);
     
-    // Apply smart filtering - ignore system noise
-    if (should_ignore_event(e)) {
-        pthread_mutex_unlock(&ports_mu);
-        return 0;  // Skip this event entirely
-    }
-    
-    // Check for duplicate events to reduce spam
-    if (is_duplicate_event(e->port_idx, e)) {
-        pthread_mutex_unlock(&ports_mu);
-        return 0;  // Skip duplicate events
-    }
-    
-    // Handle port state transitions FIRST (for mode switching)
-    if (e->type == 1 || e->type == 2) { // OPEN or CLOSE events
-        handle_port_state_transition(e->port_idx, e->type, e->tgid, e->comm);
-    }
-    
-    // Only log events that pass our real application filter
-    if (is_real_application(e)) {
+    // Only ignore our own events - log everything else like v0.3.7
+    if (e->tgid != self_tgid) {
         log_event_json(e);
     }
     
@@ -1491,7 +1480,7 @@ int main(int argc, char **argv)
     
     // Print daemon version and build info
     fprintf(stderr, "=== TTY-EGPF-MONITOR DAEMON STARTING ===\n");
-    fprintf(stderr, "Version: 0.7.20-1 (APT package)\n");
+    fprintf(stderr, "Version: 0.7.21-1 (APT package)\n");
     fprintf(stderr, "Build: %s %s\n", __DATE__, __TIME__);
     fprintf(stderr, "Binary: %s\n", argv[0]);
     fprintf(stderr, "PID: %d\n", getpid());
