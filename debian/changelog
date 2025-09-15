@@ -1,3 +1,12 @@
+tty-egpf-monitor (0.7.24-1) unstable; urgency=high
+
+  * CRITICAL FIX: v0.7.23 was published with broken code due to force-push issue
+  * This release includes the actual working eBPF code with debug statements
+  * The debug statements are essential for eBPF programs to detect picocom events
+  * v0.7.23 APT package was built from code without the working debug statements
+  * This release will actually work and detect external process events properly
+  * Resolves the issue where APT-installed daemon doesn't detect picocom events
+
 tty-egpf-monitor (0.7.23-1) unstable; urgency=high
 
   * CRITICAL FIX: APT package v0.7.22 was built from outdated code
