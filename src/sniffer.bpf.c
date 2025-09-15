@@ -469,6 +469,8 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
     const char *filename = NULL;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
+    // DEBUG: Print to trace_pipe to see if this function is called
+    bpf_printk("tp_enter_openat2_tp: tgid=%d filename=%p", tgid, filename);
     __u32 k0 = 0;
     struct pathval *sg = bpf_map_lookup_elem(&scratch2, &k0);
     if (!sg)
@@ -495,6 +497,8 @@ int tp_enter_openat2_tp(struct trace_event_raw_sys_enter *ctx)
             if (midx >= MAX_TARGETS/2) {
                 midx = midx - MAX_TARGETS/2;
             }
+        // DEBUG: Print the path being matched and chosen index
+        bpf_printk("tp_enter_openat2_tp: path=%s matched_idx=%u", sg->path, midx);
         bpf_map_update_elem(&pending_open_idx, &tgid, &midx, BPF_ANY);
     }
     return 0;
@@ -575,6 +579,8 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
 {
     __s64 ret = 0; 
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret);
+    // DEBUG: Print to trace_pipe to see if this function is called
+    bpf_printk("tp_exit_openat2_tp: ret=%lld", ret);
     if (ret < 0) {
         __u32 tgid_fail = bpf_get_current_pid_tgid() >> 32;
         bpf_map_delete_elem(&pending_open_idx, &tgid_fail);
@@ -592,6 +598,8 @@ int tp_exit_openat2_tp(struct trace_event_raw_sys_exit *ctx)
     }
     
     /* Always emit OPEN event for all monitored TTY opens */
+    // DEBUG: Print when we emit an event
+    bpf_printk("tp_exit_openat2_tp: EMITTING EVENT port_idx=%u ret=%lld", midx, ret);
     struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
     if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=ret; o2->dir=0; o2->port_idx=midx; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
     /* Mark emitted to allow read/write logging */

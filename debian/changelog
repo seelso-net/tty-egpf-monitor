@@ -1,3 +1,8 @@
+tty-egpf-monitor (0.7.28-1) unstable; urgency=high
+
+  * ADD: openat2 enter/exit handlers with debug printk for 24.04
+  * FIX: improve visibility to diagnose missing OPEN on newer glibc
+
 tty-egpf-monitor (0.7.27-1) unstable; urgency=high
 
   * FIX: Adjust daemon to build without raw_syscalls links (CI failure)
