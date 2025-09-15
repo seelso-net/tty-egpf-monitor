@@ -1,3 +1,12 @@
+tty-egpf-monitor (0.7.23-1) unstable; urgency=high
+
+  * CRITICAL FIX: APT package v0.7.22 was built from outdated code
+  * The APT package was missing the working eBPF programs with debug statements
+  * This release includes the current working eBPF code that properly detects events
+  * Local debug build works but APT package was built from older source
+  * Now APT package will have the same working eBPF programs as local build
+  * Resolves the issue where APT-installed daemon doesn't detect picocom events
+
 tty-egpf-monitor (0.7.22-1) unstable; urgency=high
 
   * CRITICAL FIX: Force static libbpf linking in GitHub Actions build
