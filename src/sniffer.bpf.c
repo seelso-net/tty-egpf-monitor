@@ -439,6 +439,9 @@ int tp_enter_openat_tp(struct trace_event_raw_sys_enter *ctx)
     const char *filename = NULL;
     bpf_probe_read_kernel(&filename, sizeof(filename), &ctx->args[1]);
     
+    // DEBUG: Print to trace_pipe to see if this function is called
+    bpf_printk("tp_enter_openat_tp: tgid=%d filename=%p", tgid, filename);
+    
     struct open_ctx oc = { .filename = filename };
     bpf_map_update_elem(&op_ctx, &tgid, &oc, BPF_ANY);
     return 0;
@@ -488,6 +491,9 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     bpf_probe_read_kernel(&ret, sizeof(ret), &ctx->ret); /* new fd if >=0 */
     __u32 tgid = bpf_get_current_pid_tgid() >> 32;
 
+    // DEBUG: Print to trace_pipe to see if this function is called
+    bpf_printk("tp_exit_openat_tp: tgid=%d ret=%lld", tgid, ret);
+
     struct open_ctx *oc = bpf_map_lookup_elem(&op_ctx, &tgid);
     if (!oc) return 0;
 
@@ -499,6 +505,9 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
     int glen = bpf_probe_read_user_str(sg->path, sizeof(sg->path), oc->filename);
     bpf_map_delete_elem(&op_ctx, &tgid);
     if (glen <= 0) return 0;
+
+    // DEBUG: Print the path being processed
+    bpf_printk("tp_exit_openat_tp: path=%s ret=%lld", sg->path, ret);
 
     if (ret >= 0) {
         /* Match path against configured targets and set fd maps */
@@ -523,6 +532,9 @@ int tp_exit_openat_tp(struct trace_event_raw_sys_exit *ctx)
             struct fdkey k; k.tgid = tgid; k.fd = (__s32)ret; __u8 val = 1;
             bpf_map_update_elem(&fd_interest, &k, &val, BPF_ANY);
             bpf_map_update_elem(&fd_portidx, &k, &midx, BPF_ANY);
+
+            // DEBUG: Print when we emit an event
+            bpf_printk("tp_exit_openat_tp: EMITTING EVENT for %s port_idx=%d", sg->path, midx);
 
             struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
             if (e) {
