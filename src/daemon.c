@@ -1581,17 +1581,7 @@ int main(int argc, char **argv)
             // Checking individual BPF program attachments...
     
     // Check if programs are actually attached to tracepoints
-    if (g_skel->links.tp_raw_sys_enter) {
-        fprintf(stderr, "SUCCESS: tp_raw_sys_enter program attached to tracepoint\n");
-    } else {
-        fprintf(stderr, "ERROR: tp_raw_sys_enter program NOT attached to tracepoint\n");
-    }
-    
-    if (g_skel->links.tp_raw_sys_exit) {
-        fprintf(stderr, "SUCCESS: tp_raw_sys_exit program attached to tracepoint\n");
-    } else {
-        fprintf(stderr, "ERROR: tp_raw_sys_exit program NOT attached to tracepoint\n");
-    }
+    // raw_syscalls programs may be disabled in some builds (v0.3.7-style)
     
     if (g_skel->links.tp_enter_openat_tp) {
         fprintf(stderr, "tp_enter_openat_tp program attached to tracepoint\n");
