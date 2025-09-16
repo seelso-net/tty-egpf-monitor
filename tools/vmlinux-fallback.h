@@ -51,5 +51,48 @@ typedef __u64 u64; typedef __u32 u32; typedef __u16 u16; typedef __u8 u8;
 struct trace_event_raw_sys_enter { __u64 args[6]; __u64 id; };
 struct trace_event_raw_sys_exit { __u64 ret; __u64 id; };
 
+/* Forward declarations */
+struct task_struct;
+struct files_struct;
+struct fdtable;
+struct file;
+struct inode;
+
+/* Minimal structure definitions for eBPF access */
+struct task_struct {
+	/* Only include the fields we actually access */
+	struct files_struct *files;
+	/* Add padding to avoid size mismatches */
+	char _padding[4096 - sizeof(struct files_struct*)];
+};
+
+struct files_struct {
+	/* Only include the fields we actually access */
+	struct fdtable *fdt;
+	/* Add padding to avoid size mismatches */
+	char _padding[4096 - sizeof(struct fdtable*)];
+};
+
+struct fdtable {
+	/* Only include the fields we actually access */
+	struct file **fd;
+	/* Add padding to avoid size mismatches */
+	char _padding[4096 - sizeof(struct file**)];
+};
+
+struct file {
+	/* Only include the fields we actually access */
+	struct inode *f_inode;
+	/* Add padding to avoid size mismatches */
+	char _padding[4096 - sizeof(struct inode*)];
+};
+
+struct inode {
+	/* Only include the fields we actually access */
+	__u64 i_rdev;
+	/* Add padding to avoid size mismatches */
+	char _padding[4096 - sizeof(__u64)];
+};
+
 #endif /* __VMLINUX_H */
 
