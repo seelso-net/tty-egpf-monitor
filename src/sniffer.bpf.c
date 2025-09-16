@@ -390,6 +390,58 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 }
                 bpf_map_delete_elem(&pending_open_writable, &tgid);
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
+            } else {
+                /* Fallback: device-based mapping using i_rdev to handle path mismatches */
+                struct fdkey k2; k2.tgid = tgid; k2.fd = (__s32)ret;
+                /* Resolve file* from current task's files->fdt->fd[fd] */
+                struct task_struct *task = (struct task_struct *)bpf_get_current_task_btf();
+                struct files_struct *files = NULL; BPF_CORE_READ_INTO(&files, task, files);
+                if (files) {
+                    struct fdtable *fdt = NULL; BPF_CORE_READ_INTO(&fdt, files, fdt);
+                    if (fdt) {
+                        struct file **fdpp = NULL; BPF_CORE_READ_INTO(&fdpp, fdt, fd);
+                        if (fdpp) {
+                            struct file *filp = NULL;
+                            /* Read pointer at index 'ret' (fd) */
+                            bpf_probe_read_kernel(&filp, sizeof(filp), &fdpp[(__s32)ret]);
+                            if (filp) {
+                                struct inode *ino = NULL; BPF_CORE_READ_INTO(&ino, filp, f_inode);
+                                if (ino) {
+                                    __u64 rdev = 0; BPF_CORE_READ_INTO(&rdev, ino, i_rdev);
+                                    /* Compare against target_dev map */
+                                    __u32 k0 = 0;
+#pragma unroll
+                                    for (int i = 0; i < MAX_TARGETS; i++) {
+                                        __u32 ki = i; __u64 *td = bpf_map_lookup_elem(&target_dev, &ki);
+                                        if (!td) continue;
+                                        __u64 tdev = *td;
+                                        if (tdev == 0) continue;
+                                        if (tdev == rdev) {
+                                            __u32 midx2 = (unsigned)i;
+                                            if (midx2 >= MAX_TARGETS/2) { midx2 = midx2 - MAX_TARGETS/2; }
+                                            __u8 one2 = 1;
+                                            bpf_map_update_elem(&fd_interest, &k2, &one2, BPF_ANY);
+                                            bpf_map_update_elem(&fd_portidx, &k2, &midx2, BPF_ANY);
+                                            /* Persist writability if we captured it */
+                                            __u8 *wrp = bpf_map_lookup_elem(&pending_open_writable, &tgid);
+                                            if (wrp && *wrp) { __u8 yes2 = 1; bpf_map_update_elem(&fd_is_writable, &k2, &yes2, BPF_ANY); }
+                                            /* Emit OPEN if not already emitted */
+                                            __u8 *already2 = bpf_map_lookup_elem(&fd_open_emitted, &k2);
+                                            if (!already2) {
+                                                bpf_printk("raw_exit_open: tgid=%u fd=%d idx=%u", tgid, k2.fd, midx2);
+                                                struct event *o2 = bpf_ringbuf_reserve(&events, sizeof(*o2), 0);
+                                                if (o2) { fill_common(o2, EV_OPEN); o2->cmd=0; o2->ret=ret; o2->dir=0; o2->port_idx=midx2; o2->data_len=0; o2->data_trunc=0; bpf_ringbuf_submit(o2, 0); }
+                                                __u8 emitted2 = 1; bpf_map_update_elem(&fd_open_emitted, &k2, &emitted2, BPF_ANY);
+                                            }
+                                            bpf_map_delete_elem(&pending_open_writable, &tgid);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         return 0;

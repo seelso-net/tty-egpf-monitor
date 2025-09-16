@@ -1,3 +1,13 @@
+tty-egpf-monitor (0.7.31-1) unstable; urgency=high
+
+  * FIX: Add device-based fallback for OPEN mapping using inode i_rdev
+    - If path match missing at exit, compare opened file's rdev with target_dev
+    - Map fd and emit OPEN on match; preserve writability when captured
+  * IMPROVE: Keep immediate sys_enter matching and writability propagation
+  * DEBUG: Keep printk markers for raw enter/exit and openat enter/exit
+
+ -- Adrian <adrian@example.com>  Tue, 16 Sep 2025 12:34:00 +0000
+
 tty-egpf-monitor (0.7.30-1) unstable; urgency=high
 
   * ALIGN: v0.3.7 behavior for OPEN mapping
