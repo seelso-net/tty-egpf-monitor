@@ -27,7 +27,9 @@ else
 endif
 
 CFLAGS := -O2 -g
-BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH)
+# Define ENABLE_RDEV_FALLBACK only when BTF is available
+HAVE_BTF := $(shell [ -r /sys/kernel/btf/vmlinux ] && echo 1 || echo 0)
+BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_$(BPF_ARCH) $(if $(filter 1,$(HAVE_BTF)),-DENABLE_RDEV_FALLBACK,)
 
 # Detect available kernel headers dynamically
 # Try to find the best available kernel headers

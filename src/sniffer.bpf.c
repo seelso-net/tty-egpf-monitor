@@ -391,6 +391,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                 bpf_map_delete_elem(&pending_open_writable, &tgid);
                 bpf_map_delete_elem(&pending_open_idx, &tgid);
             } else {
+#ifdef ENABLE_RDEV_FALLBACK
                 /* Fallback: device-based mapping using i_rdev to handle path mismatches */
                 struct fdkey k2; k2.tgid = tgid; k2.fd = (__s32)ret;
                 /* Resolve file* from current task's files->fdt->fd[fd] */
@@ -442,6 +443,7 @@ int tp_raw_sys_exit(struct trace_event_raw_sys_exit *ctx)
                         }
                     }
                 }
+#endif /* ENABLE_RDEV_FALLBACK */
             }
         }
         return 0;

@@ -1,3 +1,11 @@
+tty-egpf-monitor (0.7.32-1) unstable; urgency=high
+
+  * BUILD: Guard i_rdev fallback behind ENABLE_RDEV_FALLBACK (requires BTF)
+    - Noble without BTF now builds using path-based mapping only
+  * No functional change on BTF-enabled systems
+
+ -- Adrian <adrian@example.com>  Tue, 16 Sep 2025 12:50:00 +0000
+
 tty-egpf-monitor (0.7.31-1) unstable; urgency=high
 
   * FIX: Add device-based fallback for OPEN mapping using inode i_rdev
